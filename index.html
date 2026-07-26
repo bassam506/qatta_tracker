@@ -1,12 +1,14 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>استراحة الدرعية</title>
-<link rel="preconnect" href="https://fonts.googleapis.com/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Markazi+Text:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-  :root{
+  :root, [data-theme="dark"]{
     --ink:#eee7d6;
     --paper:#f3ecd8;
     --paper-dim:#e9e0c8;
@@ -18,7 +20,32 @@
     --stamp-red:#8c3a2b;
     --ok:#4f7d5a;
     --bad:#a34a3a;
+    --card-text:#231a10;
+    --card-sub:#7a6c47;
+    --card-border:#d9cda0;
+    --input-bg:#fffdf7;
+    --input-border:#b8ab84;
     --shadow: 0 10px 30px rgba(0,0,0,.35);
+    --avatar-colors: #c08a44,#4f7d5a,#8c3a2b,#4a86a8,#7d5a9e,#a86b4a,#3f8f7a,#a84a6b;
+  }
+  [data-theme="light"]{
+    --ink:#2a2318;
+    --paper:#ffffff;
+    --paper-dim:#f4efe2;
+    --ledger:#f0e9d6;
+    --ledger-deep:#e8dfc7;
+    --ledger-line:#d8cba3;
+    --copper:#b4783a;
+    --copper-bright:#96612c;
+    --stamp-red:#8c3a2b;
+    --ok:#3d6b48;
+    --bad:#a34a3a;
+    --card-text:#231a10;
+    --card-sub:#7a6c47;
+    --card-border:#d9cda0;
+    --input-bg:#fbf8f0;
+    --input-border:#c9bb8e;
+    --shadow: 0 8px 24px rgba(80,60,20,.12);
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;background:transparent;color:var(--ink);}
@@ -28,39 +55,49 @@
       radial-gradient(1200px 600px at 15% -10%, rgba(224,167,92,.08), transparent 60%),
       linear-gradient(180deg, var(--ledger) 0%, var(--ledger-deep) 100%);
     min-height:100vh;
-    padding:24px 16px 60px;
+    padding:20px 14px 60px;
+    transition:background .3s ease, color .3s ease;
   }
-  .wrap{max-width:980px;margin:0 auto;}
+  .wrap{max-width:1040px;margin:0 auto;}
 
   /* Header */
   .masthead{
     display:flex; align-items:center; justify-content:space-between; gap:16px;
-    padding-bottom:18px; margin-bottom:22px;
+    padding-bottom:16px; margin-bottom:18px;
     border-bottom:2px solid var(--ledger-line);
     flex-wrap:wrap;
   }
   .masthead h1{
     font-family:'Markazi Text', 'Cairo', serif;
-    font-weight:700; font-size:2.6rem; margin:0; color:var(--copper-bright);
+    font-weight:700; font-size:2.3rem; margin:0; color:var(--copper-bright);
     letter-spacing:.5px;
   }
-  .masthead .sub{ font-size:.85rem; color:#b9c9bd; margin-top:2px; }
+  .masthead .sub{ font-size:.82rem; color:#b9c9bd; margin-top:2px; }
+  [data-theme="light"] .masthead .sub{ color:#6b6552; }
+  .head-right{ display:flex; align-items:center; gap:10px; }
   .seal{
-    width:64px;height:64px;border-radius:50%;
+    width:54px;height:54px;border-radius:50%;
     border:3px solid var(--copper);
     display:flex;align-items:center;justify-content:center;
-    font-size:1.6rem; color:var(--copper-bright); flex-shrink:0;
+    font-size:1.4rem; color:var(--copper-bright); flex-shrink:0;
     background:radial-gradient(circle at 35% 30%, rgba(224,167,92,.15), transparent 70%);
     transform:rotate(-6deg);
   }
+  .theme-toggle{
+    width:40px; height:40px; border-radius:50%; border:1.5px solid var(--ledger-line);
+    background:transparent; color:var(--copper-bright); cursor:pointer; font-size:1.05rem;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .theme-toggle:hover{ border-color:var(--copper); }
 
   /* Tabs */
-  .tabs{ display:flex; gap:8px; margin-bottom:22px; flex-wrap:wrap; }
+  .tabs{ display:flex; gap:6px; margin-bottom:18px; flex-wrap:wrap; }
   .tab-btn{
     background:transparent; border:1.5px solid var(--ledger-line); color:#cdd8ce;
-    padding:9px 18px; border-radius:999px; font-family:'Cairo'; font-weight:600;
-    font-size:.92rem; cursor:pointer; transition:.15s ease;
+    padding:8px 14px; border-radius:999px; font-family:'Cairo'; font-weight:600;
+    font-size:.85rem; cursor:pointer; transition:.15s ease; white-space:nowrap;
   }
+  [data-theme="light"] .tab-btn{ color:#5a5138; }
   .tab-btn:hover{ border-color:var(--copper); color:var(--copper-bright); }
   .tab-btn.active{ background:var(--copper); border-color:var(--copper); color:#241505; }
 
@@ -70,117 +107,141 @@
 
   /* Card */
   .card{
-    background:var(--paper); color:#231a10;
+    background:var(--paper); color:var(--card-text);
     border-radius:10px; box-shadow:var(--shadow);
-    padding:20px; margin-bottom:18px;
-    background-image: repeating-linear-gradient(
-      to bottom, transparent 0, transparent 37px, rgba(22,52,42,.07) 38px
-    );
+    padding:18px; margin-bottom:16px;
     position:relative;
     border:1px solid rgba(0,0,0,.08);
   }
-  .card::before{
-    content:''; position:absolute; top:0; bottom:0; right:26px; width:1px;
-    background:rgba(140,58,43,.25);
-  }
-  .card-inner{ position:relative; padding-right:8px; }
   .card h2{
-    font-family:'Markazi Text','Cairo',serif; font-size:1.5rem; margin:0 0 14px;
-    color:var(--ledger); border-bottom:1px solid rgba(22,52,42,.2); padding-bottom:8px;
+    font-family:'Markazi Text','Cairo',serif; font-size:1.4rem; margin:0 0 12px;
+    color:var(--ledger-deep-text, var(--card-text)); border-bottom:1px solid rgba(0,0,0,.1); padding-bottom:8px;
   }
+  [data-theme="dark"] .card h2, :root:not([data-theme]) .card h2{ color:#16342a; }
+
+  .card-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:720px){ .card-grid{ grid-template-columns:1fr; } }
 
   /* Month switcher */
-  .month-switch{ display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+  .month-switch{ display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
   .month-switch button{
     background:var(--ledger); color:var(--paper); border:none; border-radius:8px;
-    width:36px; height:36px; font-size:1rem; cursor:pointer; font-weight:700;
+    width:34px; height:34px; font-size:1rem; cursor:pointer; font-weight:700;
   }
+  [data-theme="light"] .month-switch button{ background:var(--copper); color:#fff; }
   .month-switch button:hover{ background:var(--stamp-red); }
-  .month-label{ font-weight:700; font-size:1.2rem; color:var(--ledger); min-width:150px; text-align:center; }
+  .month-label{ font-weight:700; font-size:1.1rem; min-width:140px; text-align:center; }
   .amount-field{ display:flex; align-items:center; gap:8px; margin-inline-start:auto; }
-  .amount-field label{ font-size:.85rem; color:#5a4d33; }
+  .amount-field label{ font-size:.82rem; color:var(--card-sub); }
   .amount-field input{
-    width:100px; padding:7px 10px; border-radius:6px; border:1px solid #b8ab84;
-    font-family:'Cairo'; font-size:.95rem; background:#fffdf7;
+    width:90px; padding:6px 9px; border-radius:6px; border:1px solid var(--input-border);
+    font-family:'Cairo'; font-size:.9rem; background:var(--input-bg); color:var(--card-text);
   }
 
   /* Summary strip */
-  .summary-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px; }
+  .summary-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:9px; margin-bottom:14px; }
   .stat{
-    background:#fffdf7; border:1px solid #d9cda0; border-radius:8px; padding:10px 12px; text-align:center;
+    background:var(--input-bg); border:1px solid var(--card-border); border-radius:8px; padding:9px 10px; text-align:center;
   }
-  .stat .n{ font-size:1.4rem; font-weight:900; color:var(--ledger); }
-  .stat .l{ font-size:.72rem; color:#7a6c47; }
+  .stat .n{ font-size:1.3rem; font-weight:900; }
+  .stat .l{ font-size:.68rem; color:var(--card-sub); }
   .stat.warn .n{ color:var(--bad); }
   .stat.good .n{ color:var(--ok); }
 
   /* Member rows */
   .member-row{
-    display:flex; align-items:center; gap:12px; padding:10px 4px;
-    border-bottom:1px dashed #cabf95;
+    display:flex; align-items:center; gap:10px; padding:9px 4px;
+    border-bottom:1px dashed var(--card-border);
   }
   .member-row:last-child{ border-bottom:none; }
-  .m-name{ font-weight:700; flex:1; min-width:120px; }
-  .m-occasion{ font-size:.75rem; color:#7a6c47; }
+  .avatar{
+    width:34px; height:34px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-weight:800; font-size:.9rem;
+  }
+  .m-main{ flex:1; min-width:0; }
+  .m-name{ font-weight:700; }
+  .m-note{ font-size:.7rem; color:var(--card-sub); }
+  .occ-badge{
+    font-size:.68rem; background:var(--copper); color:#241505; border-radius:999px;
+    padding:2px 8px; margin-inline-start:6px; white-space:nowrap;
+  }
   .pay-toggle{
-    border:none; border-radius:999px; padding:7px 16px; font-family:'Cairo'; font-weight:700;
-    font-size:.85rem; cursor:pointer; min-width:96px; transition:.15s;
+    border:none; border-radius:999px; padding:7px 14px; font-family:'Cairo'; font-weight:700;
+    font-size:.82rem; cursor:pointer; min-width:88px; transition:transform .15s ease, background .15s;
+    flex-shrink:0;
   }
   .pay-toggle.paid{ background:var(--ok); color:#fff; }
   .pay-toggle.unpaid{ background:#e6dcb9; color:#6b5d38; border:1px dashed var(--bad); }
-  .stamp-mark{ font-size:1.1rem; }
+  [data-theme="light"] .pay-toggle.unpaid{ background:#f0e6c8; }
+  .pay-toggle.pop{ animation:pop .35s ease; }
+  @keyframes pop{ 0%{transform:scale(1);} 40%{transform:scale(1.18);} 100%{transform:scale(1);} }
+  .stamp-mark{ font-size:1rem; }
 
   /* Members tab */
-  .add-member-form{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .add-member-form{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
   .add-member-form input, .add-member-form select{
-    padding:8px 10px; border-radius:6px; border:1px solid #b8ab84; font-family:'Cairo';
-    background:#fffdf7; font-size:.9rem;
+    padding:8px 10px; border-radius:6px; border:1px solid var(--input-border); font-family:'Cairo';
+    background:var(--input-bg); color:var(--card-text); font-size:.88rem;
   }
-  .add-member-form input[name="name"]{ flex:1; min-width:140px; }
-  .add-member-form input[name="occDate"]{ width:150px; }
+  .add-member-form input[name="name"]{ flex:1; min-width:130px; }
+  .add-member-form input[name="occDate"]{ width:140px; }
+  .add-member-form input[name="note"]{ width:160px; }
+  .search-box{ margin-bottom:12px; }
+  .search-box input{
+    width:100%; padding:9px 12px; border-radius:8px; border:1px solid var(--input-border);
+    font-family:'Cairo'; font-size:.9rem; background:var(--input-bg); color:var(--card-text);
+  }
   .btn{
     background:var(--stamp-red); color:#fff; border:none; border-radius:6px;
-    padding:8px 16px; font-family:'Cairo'; font-weight:700; cursor:pointer; font-size:.9rem;
+    padding:8px 15px; font-family:'Cairo'; font-weight:700; cursor:pointer; font-size:.87rem;
   }
   .btn:hover{ background:#752e21; }
-  .btn.secondary{ background:var(--ledger); }
-  .btn.secondary:hover{ background:#0e2620; }
+  .btn.secondary{ background:var(--ledger); color:var(--paper); }
+  [data-theme="light"] .btn.secondary{ background:var(--copper); color:#fff; }
+  .btn.secondary:hover{ opacity:.85; }
   .member-list-row{
-    display:flex; align-items:center; gap:10px; padding:9px 4px; border-bottom:1px dashed #cabf95;
+    display:flex; align-items:center; gap:8px; padding:9px 4px; border-bottom:1px dashed var(--card-border);
   }
   .member-list-row .del{ background:none; border:none; color:var(--bad); cursor:pointer; font-size:1rem; }
+  .empty{ text-align:center; color:var(--card-sub); padding:26px 10px; font-size:.92rem; }
   .reorder-btns{ display:flex; flex-direction:column; gap:2px; }
   .reorder-btn{
     background:var(--ledger); color:var(--paper); border:none; border-radius:4px;
-    width:22px; height:18px; font-size:.65rem; line-height:1; cursor:pointer; padding:0;
+    width:22px; height:18px; font-size:.62rem; line-height:1; cursor:pointer; padding:0;
   }
+  [data-theme="light"] .reorder-btn{ background:var(--copper); color:#fff; }
   .reorder-btn:hover{ background:var(--stamp-red); }
   .reorder-btn:disabled{ opacity:.3; cursor:default; }
-  .reorder-btn:disabled:hover{ background:var(--ledger); }
-  .empty{ text-align:center; color:#8a7c54; padding:30px 10px; font-size:.95rem; }
+  .note-input{
+    width:130px; padding:5px 7px; border-radius:5px; border:1px solid var(--input-border);
+    font-family:'Cairo'; font-size:.72rem; background:var(--input-bg); color:var(--card-text);
+  }
 
   /* Occasions */
-  .occ-row{ display:flex; align-items:center; gap:14px; padding:10px 4px; border-bottom:1px dashed #cabf95; }
+  .occ-row{ display:flex; align-items:center; gap:12px; padding:9px 4px; border-bottom:1px dashed var(--card-border); }
   .occ-date-badge{
     background:var(--copper); color:#241505; font-weight:800; border-radius:8px;
-    padding:6px 10px; font-size:.8rem; min-width:60px; text-align:center;
+    padding:5px 9px; font-size:.76rem; min-width:56px; text-align:center;
   }
-  .occ-days{ font-size:.72rem; color:#7a6c47; }
+  .occ-days{ font-size:.7rem; color:var(--card-sub); }
 
-  footer{ text-align:center; font-size:.72rem; color:#7f8f83; margin-top:26px; }
+  footer{ text-align:center; font-size:.7rem; color:#7f8f83; margin-top:24px; }
+  [data-theme="light"] footer{ color:#8a8266; }
 
   /* Session bar */
   .session-bar{
-    display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap;
+    display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;
     background:rgba(0,0,0,.15); border:1px solid var(--ledger-line); border-radius:8px;
     padding:8px 14px;
   }
-  .session-bar .who{ font-size:.85rem; color:#dce7de; }
+  [data-theme="light"] .session-bar{ background:rgba(0,0,0,.03); }
+  .session-bar .who{ font-size:.82rem; color:#dce7de; }
+  [data-theme="light"] .session-bar .who{ color:#4a4530; }
   .session-bar .who b{ color:var(--copper-bright); }
-  .session-bar .locked-note{ font-size:.8rem; color:#a9b8ac; }
   .link-btn{
     background:none; border:none; color:var(--copper-bright); cursor:pointer;
-    font-family:'Cairo'; font-size:.82rem; text-decoration:underline; padding:0;
+    font-family:'Cairo'; font-size:.8rem; text-decoration:underline; padding:0;
   }
 
   /* Login modal */
@@ -190,30 +251,53 @@
   }
   .modal-overlay.hidden{ display:none; }
   .modal-box{
-    background:var(--paper); color:#231a10; border-radius:12px; padding:26px;
-    max-width:360px; width:100%; box-shadow:var(--shadow);
+    background:var(--paper); color:var(--card-text); border-radius:12px; padding:24px;
+    max-width:350px; width:100%; box-shadow:var(--shadow);
     border:1px solid rgba(0,0,0,.1);
   }
   .modal-box h3{
-    font-family:'Markazi Text','Cairo',serif; font-size:1.5rem; margin:0 0 6px; color:var(--ledger);
+    font-family:'Markazi Text','Cairo',serif; font-size:1.4rem; margin:0 0 6px; color:var(--ledger-deep-text, #16342a);
   }
-  .modal-box p.hint{ font-size:.8rem; color:#7a6c47; margin:0 0 16px; }
-  .modal-box label{ display:block; font-size:.82rem; margin:12px 0 5px; color:#5a4d33; font-weight:700; }
+  .modal-box p.hint{ font-size:.78rem; color:var(--card-sub); margin:0 0 14px; }
+  .modal-box label{ display:block; font-size:.8rem; margin:10px 0 5px; color:var(--card-sub); font-weight:700; }
   .modal-box input{
-    width:100%; padding:9px 10px; border-radius:6px; border:1px solid #b8ab84;
-    font-family:'Cairo'; font-size:.95rem; background:#fffdf7;
+    width:100%; padding:9px 10px; border-radius:6px; border:1px solid var(--input-border);
+    font-family:'Cairo'; font-size:.9rem; background:var(--input-bg); color:var(--card-text);
   }
-  .modal-actions{ display:flex; gap:8px; margin-top:20px; }
+  .modal-actions{ display:flex; gap:8px; margin-top:18px; }
   .modal-actions .btn{ flex:1; }
-  .modal-error{ color:var(--bad); font-size:.8rem; margin-top:8px; min-height:1em; }
-  .disabled-hint{
-    opacity:.55; filter:grayscale(.3); pointer-events:none;
+  .modal-error{ color:var(--bad); font-size:.78rem; margin-top:8px; min-height:1em; }
+
+  /* Dashboard */
+  .dash-hero{
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;
+  }
+  .dash-big{ font-size:2.1rem; font-weight:900; }
+  .dash-label{ font-size:.78rem; color:var(--card-sub); }
+  .chart-wrap{ display:flex; align-items:center; justify-content:center; gap:16px; flex-wrap:wrap; }
+  .legend{ display:flex; flex-direction:column; gap:8px; font-size:.82rem; }
+  .legend-item{ display:flex; align-items:center; gap:6px; }
+  .legend-dot{ width:11px; height:11px; border-radius:50%; display:inline-block; }
+  .stat-list{ list-style:none; margin:0; padding:0; }
+  .stat-list li{ display:flex; justify-content:space-between; padding:7px 2px; border-bottom:1px dashed var(--card-border); font-size:.85rem; }
+  .stat-list li:last-child{ border-bottom:none; }
+  .rank-badge{
+    display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px;
+    border-radius:50%; background:var(--copper); color:#241505; font-size:.7rem; font-weight:800; margin-inline-end:6px;
   }
 
+  /* Archive table */
+  .archive-table{ width:100%; border-collapse:collapse; font-size:.85rem; }
+  .archive-table th, .archive-table td{ padding:8px 6px; text-align:center; border-bottom:1px dashed var(--card-border); }
+  .archive-table th{ color:var(--card-sub); font-weight:700; font-size:.75rem; }
+  .archive-table td:first-child, .archive-table th:first-child{ text-align:start; }
+
   @media (max-width:560px){
-    .masthead h1{ font-size:2rem; }
+    .masthead h1{ font-size:1.8rem; }
     .summary-grid{ grid-template-columns:repeat(2,1fr); }
-    .amount-field{ margin-inline-start:0; }
+    .amount-field{ margin-inline-start:0; width:100%; }
+    .pay-toggle{ min-width:76px; padding:6px 10px; font-size:.76rem; }
+    .dash-big{ font-size:1.7rem; }
   }
 </style>
 </head>
@@ -223,186 +307,102 @@
   <div class="masthead">
     <div>
       <h1>استراحة الدرعية</h1>
-      <div class="sub" id="memberCountSub">عدد الأعضاء: 28</div>
+      <div class="sub" id="memberCountSub">جاري تحميل البيانات...</div>
     </div>
-    <div class="seal">💰</div>
+    <div class="head-right">
+      <button class="theme-toggle" id="themeToggle" title="تبديل المظهر">🌙</button>
+      <div class="seal">💰</div>
+    </div>
   </div>
 
   <div class="session-bar">
     <div class="who" id="sessionWho">وضع القراءة فقط — التعديل يحتاج رمز الدخول</div>
-    <button class="link-btn" id="loginBtn" style="display: inline;">تسجيل الدخول</button>
+    <button class="link-btn" id="loginBtn">تسجيل الدخول</button>
     <button class="link-btn" id="logoutBtn" style="display:none">تسجيل الخروج</button>
     <button class="link-btn" id="changePinBtn" style="display:none">تغيير رمز الدخول</button>
   </div>
 
   <div class="tabs">
-    <button class="tab-btn active" data-tab="monthly">القطة الشهرية</button>
+    <button class="tab-btn active" data-tab="dashboard">الرئيسية</button>
+    <button class="tab-btn" data-tab="monthly">القطة الشهرية</button>
     <button class="tab-btn" data-tab="members">الأعضاء</button>
     <button class="tab-btn" data-tab="occasions">المناسبات</button>
+    <button class="tab-btn" data-tab="archive">الأرشيف</button>
+  </div>
+
+  <!-- Dashboard Tab -->
+  <div class="panel active" id="panel-dashboard">
+    <div class="card">
+      <div class="dash-hero">
+        <div>
+          <div class="dash-label" id="dashMonthLabel">—</div>
+          <div class="dash-big" id="dashCollected">0 ر.س</div>
+          <div class="dash-label">محصّل من إجمالي <span id="dashExpected">0 ر.س</span></div>
+        </div>
+        <div>
+          <div class="dash-label">قطّوا</div>
+          <div class="dash-big" id="dashPaidCount" style="color:var(--ok)">0</div>
+        </div>
+        <div>
+          <div class="dash-label">ما قطّوا بعد</div>
+          <div class="dash-big" id="dashUnpaidCount" style="color:var(--bad)">0</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-grid">
+      <div class="card">
+        <h2>نسبة التحصيل هذا الشهر</h2>
+        <div class="chart-wrap">
+          <div id="pieChartHolder"></div>
+          <div class="legend">
+            <div class="legend-item"><span class="legend-dot" style="background:var(--ok)"></span> قطّوا</div>
+            <div class="legend-item"><span class="legend-dot" style="background:var(--bad)"></span> ما قطّوا</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>تطوّر التحصيل (آخر 6 أشهر)</h2>
+        <div id="barChartHolder"></div>
+      </div>
+    </div>
+
+    <div class="card-grid">
+      <div class="card">
+        <h2>الأكثر التزامًا</h2>
+        <ol class="stat-list" id="topMembersList" style="list-style:none;"></ol>
+      </div>
+      <div class="card">
+        <h2>مناسبات قريبة</h2>
+        <div id="dashOcc"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Monthly Tab -->
-  <div class="panel active" id="panel-monthly">
+  <div class="panel" id="panel-monthly">
     <div class="card">
-      <div class="card-inner">
-        <div class="month-switch">
-          <button id="prevMonth">‹</button>
-          <div class="month-label" id="monthLabel">يوليو 2026</div>
-          <button id="nextMonth">›</button>
-          <div class="amount-field">
-            <label>مبلغ القطة للفرد (ر.س)</label>
-            <input type="number" id="amountInput" min="0" step="5">
-          </div>
+      <div class="month-switch">
+        <button id="prevMonth">‹</button>
+        <div class="month-label" id="monthLabel">—</div>
+        <button id="nextMonth">›</button>
+        <div class="amount-field">
+          <label>مبلغ القطة للفرد (ر.س)</label>
+          <input type="number" id="amountInput" min="0" step="5">
         </div>
+      </div>
 
-        <div class="summary-grid">
-          <div class="stat good"><div class="n" id="statPaid">7</div><div class="l">قطّوا</div></div>
-          <div class="stat warn"><div class="n" id="statUnpaid">21</div><div class="l">ما قطّوا</div></div>
-          <div class="stat"><div class="n" id="statTotal">١٬٧٥٠</div><div class="l">إجمالي المحصّل (ر.س)</div></div>
-          <div class="stat"><div class="n" id="statExpected">٧٬٠٠٠</div><div class="l">الإجمالي المتوقع (ر.س)</div></div>
-        </div>
+      <div class="summary-grid">
+        <div class="stat good"><div class="n" id="statPaid">0</div><div class="l">قطّوا</div></div>
+        <div class="stat warn"><div class="n" id="statUnpaid">0</div><div class="l">ما قطّوا</div></div>
+        <div class="stat"><div class="n" id="statTotal">0</div><div class="l">إجمالي المحصّل (ر.س)</div></div>
+        <div class="stat"><div class="n" id="statExpected">0</div><div class="l">الإجمالي المتوقع (ر.س)</div></div>
+      </div>
 
-        <div id="memberPayList"><div class="member-row">
-      <div class="m-name">معاذ بخيت</div>
-      <button class="pay-toggle unpaid" data-id="m_0rqpojm">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">سلطان جويعد</div>
-      <button class="pay-toggle unpaid" data-id="m_1qn1j7j">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">ياسر محمد</div>
-      <button class="pay-toggle unpaid" data-id="m_32n6vh7">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">سعود نادر</div>
-      <button class="pay-toggle unpaid" data-id="m_3mtqdoi">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">عيسى عبدالله</div>
-      <button class="pay-toggle unpaid" data-id="m_50fgbma">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">سياف زايد</div>
-      <button class="pay-toggle unpaid" data-id="m_6kuyv42">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">عبدالرحمن ابو بكر</div>
-      <button class="pay-toggle paid" data-id="m_6ronj61">
-        <span class="stamp-mark">✅</span> قـطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">خالد العطيشان</div>
-      <button class="pay-toggle paid" data-id="m_7yf1rfb">
-        <span class="stamp-mark">✅</span> قـطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">نايف فارس</div>
-      <button class="pay-toggle unpaid" data-id="m_8emn821">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">صالح حجرف</div>
-      <button class="pay-toggle unpaid" data-id="m_8y6es81">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">محمد عبدالله</div>
-      <button class="pay-toggle unpaid" data-id="m_d223jsp">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">احمد الشعلان</div>
-      <button class="pay-toggle unpaid" data-id="m_dew6hpq">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">بندر سطام</div>
-      <button class="pay-toggle unpaid" data-id="m_dnmi8lb">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">مشعل المطيري</div>
-      <button class="pay-toggle paid" data-id="m_e85mg9q">
-        <span class="stamp-mark">✅</span> قـطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">نواف القحطاني</div>
-      <button class="pay-toggle paid" data-id="m_ejekqsg">
-        <span class="stamp-mark">✅</span> قـطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">يزيد الحربي</div>
-      <button class="pay-toggle unpaid" data-id="m_fuf77sl">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">مانع فهد</div>
-      <button class="pay-toggle unpaid" data-id="m_fxo87ca">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">بسام الحميدي</div>
-      <button class="pay-toggle paid" data-id="m_lhfkga3">
-        <span class="stamp-mark">✅</span> قـطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">عبيد عبود</div>
-      <button class="pay-toggle unpaid" data-id="m_m7brgiz">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">فهد ممدوح</div>
-      <button class="pay-toggle unpaid" data-id="m_ngl6qph">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">خالد الضويان</div>
-      <button class="pay-toggle unpaid" data-id="m_nyhfnln">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">صالح عثمان</div>
-      <button class="pay-toggle unpaid" data-id="m_nykh8u8">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">سامي ضيف الله</div>
-      <button class="pay-toggle paid" data-id="m_pqoq0ps">
-        <span class="stamp-mark">✅</span> قـطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">حزام حمود</div>
-      <button class="pay-toggle paid" data-id="m_q99bycp">
-        <span class="stamp-mark">✅</span> قـطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">سعد عبدالله</div>
-      <button class="pay-toggle unpaid" data-id="m_qzeon4b">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">عبدالعزيز فهد</div>
-      <button class="pay-toggle unpaid" data-id="m_s8nk8ge">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">نايف خشمان</div>
-      <button class="pay-toggle unpaid" data-id="m_szyr7h2">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div><div class="member-row">
-      <div class="m-name">تركي علي</div>
-      <button class="pay-toggle unpaid" data-id="m_vjovyin">
-        <span class="stamp-mark">⭕</span> لم يقطّ
-      </button>
-    </div></div>
+      <div class="search-box"><input type="text" id="monthlySearch" placeholder="ابحث عن عضو..."></div>
+      <div id="memberPayList"></div>
+      <div style="margin-top:12px;">
+        <button class="btn secondary" id="exportMonthBtn">⬇️ تصدير هذا الشهر لإكسل</button>
       </div>
     </div>
   </div>
@@ -410,277 +410,51 @@
   <!-- Members Tab -->
   <div class="panel" id="panel-members">
     <div class="card">
-      <div class="card-inner">
-        <h2>إضافة عضو جديد</h2>
-        <div class="add-member-form">
-          <input type="text" name="name" id="newMemberName" placeholder="اسم العضو">
-          <input type="text" name="occDate" id="newMemberOcc" placeholder="تاريخ المناسبة (مثال: 09-15)">
-          <select id="newMemberOccLabel">
-            <option value="ميلاد">عيد ميلاد</option>
-            <option value="زواج">ذكرى زواج</option>
-            <option value="تخرج">تخرج</option>
-            <option value="أخرى">مناسبة أخرى</option>
-          </select>
-          <button class="btn" id="addMemberBtn">إضافة العضو</button>
-        </div>
+      <h2>إضافة عضو جديد</h2>
+      <div class="add-member-form">
+        <input type="text" name="name" id="newMemberName" placeholder="اسم العضو">
+        <input type="text" name="occDate" id="newMemberOcc" placeholder="تاريخ المناسبة (مثال: 09-15)">
+        <select id="newMemberOccLabel">
+          <option value="ميلاد">عيد ميلاد</option>
+          <option value="زواج">ذكرى زواج</option>
+          <option value="تخرج">تخرج</option>
+          <option value="أخرى">مناسبة أخرى</option>
+        </select>
+        <input type="text" name="note" id="newMemberNote" placeholder="ملاحظة (اختياري)">
+        <button class="btn" id="addMemberBtn">إضافة العضو</button>
       </div>
     </div>
     <div class="card">
-      <div class="card-inner">
-        <h2>قائمة أعضاء القطة</h2>
-        <div id="memberList"><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="0" data-dir="-1" title="تحريك لأعلى" disabled="">▲</button>
-        <button class="reorder-btn" data-idx="0" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">معاذ بخيت</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_0rqpojm" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="1" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="1" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">سلطان جويعد</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_1qn1j7j" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="2" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="2" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">ياسر محمد</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_32n6vh7" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="3" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="3" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">سعود نادر</div>
-      <div class="m-occasion">زواج — 08-02</div>
-      <button class="del" data-id="m_3mtqdoi" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="4" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="4" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">عيسى عبدالله</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_50fgbma" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="5" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="5" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">سياف زايد</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_6kuyv42" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="6" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="6" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">عبدالرحمن ابو بكر</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_6ronj61" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="7" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="7" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">خالد العطيشان</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_7yf1rfb" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="8" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="8" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">نايف فارس</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_8emn821" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="9" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="9" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">صالح حجرف</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_8y6es81" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="10" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="10" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">محمد عبدالله</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_d223jsp" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="11" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="11" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">احمد الشعلان</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_dew6hpq" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="12" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="12" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">بندر سطام</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_dnmi8lb" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="13" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="13" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">مشعل المطيري</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_e85mg9q" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="14" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="14" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">نواف القحطاني</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_ejekqsg" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="15" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="15" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">يزيد الحربي</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_fuf77sl" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="16" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="16" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">مانع فهد</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_fxo87ca" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="17" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="17" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">بسام الحميدي</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_lhfkga3" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="18" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="18" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">عبيد عبود</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_m7brgiz" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="19" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="19" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">فهد ممدوح</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_ngl6qph" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="20" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="20" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">خالد الضويان</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_nyhfnln" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="21" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="21" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">صالح عثمان</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_nykh8u8" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="22" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="22" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">سامي ضيف الله</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_pqoq0ps" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="23" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="23" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">حزام حمود</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_q99bycp" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="24" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="24" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">سعد عبدالله</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_qzeon4b" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="25" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="25" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">عبدالعزيز فهد</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_s8nk8ge" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="26" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="26" data-dir="1" title="تحريك لأسفل">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">نايف خشمان</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_szyr7h2" title="حذف العضو">🗑️</button>
-    </div><div class="member-list-row">
-      <div class="reorder-btns">
-        <button class="reorder-btn" data-idx="27" data-dir="-1" title="تحريك لأعلى">▲</button>
-        <button class="reorder-btn" data-idx="27" data-dir="1" title="تحريك لأسفل" disabled="">▼</button>
-      </div>
-      <div class="m-name" style="flex:1">تركي علي</div>
-      <div class="m-occasion">بدون مناسبة مسجّلة</div>
-      <button class="del" data-id="m_vjovyin" title="حذف العضو">🗑️</button>
-    </div></div>
-      </div>
+      <h2>قائمة أعضاء القطة</h2>
+      <div class="search-box"><input type="text" id="memberSearch" placeholder="ابحث بالاسم..."></div>
+      <div id="memberList"></div>
     </div>
   </div>
 
   <!-- Occasions Tab -->
   <div class="panel" id="panel-occasions">
     <div class="card">
-      <div class="card-inner">
-        <h2>المناسبات القادمة</h2>
-        <div id="upcomingOcc"><div class="occ-row">
-      <div class="occ-date-badge">08-02</div>
-      <div style="flex:1">
-        <div class="m-name">سعود نادر</div>
-        <div class="occ-days">زواج — بعد 7 يوم</div>
-      </div>
-    </div></div>
-      </div>
+      <h2>المناسبات القادمة</h2>
+      <div id="upcomingOcc"></div>
     </div>
     <div class="card">
-      <div class="card-inner">
-        <h2>كل المناسبات المسجّلة</h2>
-        <div id="allOcc"><div class="occ-row">
-      <div class="occ-date-badge">08-02</div>
-      <div style="flex:1">
-        <div class="m-name">سعود نادر</div>
-        <div class="occ-days">زواج</div>
+      <h2>كل المناسبات المسجّلة</h2>
+      <div id="allOcc"></div>
+    </div>
+  </div>
+
+  <!-- Archive Tab -->
+  <div class="panel" id="panel-archive">
+    <div class="card">
+      <h2>أرشيف الأشهر السابقة</h2>
+      <div style="overflow-x:auto;">
+        <table class="archive-table" id="archiveTable">
+          <thead><tr><th>الشهر</th><th>قطّوا</th><th>ما قطّوا</th><th>المحصّل</th><th>المتوقع</th></tr></thead>
+          <tbody id="archiveBody"></tbody>
+        </table>
       </div>
-    </div></div>
+      <div style="margin-top:12px;">
+        <button class="btn secondary" id="exportAllBtn">⬇️ تصدير كل السجل لإكسل</button>
       </div>
     </div>
   </div>
@@ -730,16 +504,33 @@ const pinDocRef = doc(db, 'config', 'pin');
 
 let members = [];
 let monthsData = {};
-let currentMonth = new Date().toISOString().slice(0,7); // YYYY-MM
+let currentMonth = new Date().toISOString().slice(0,7);
 const DEFAULT_AMOUNT = 100;
 
-let accessPin = null;       // shared secret code, null until loaded / not yet created
-let session = null;         // { name } once logged in on this browser (stored in localStorage)
-let pendingAction = null;   // function to run after successful login
+let accessPin = null;
+let session = null;
+let pendingAction = null;
 const ready = { members:false, months:false, pin:false };
+const AVATAR_COLORS = ['#c08a44','#4f7d5a','#8c3a2b','#4a86a8','#7d5a9e','#a86b4a','#3f8f7a','#a84a6b'];
 
 function uid(){ return 'm_' + Math.random().toString(36).slice(2,9); }
 
+/* ---------- Theme ---------- */
+function loadTheme(){
+  let t = 'dark';
+  try{ t = localStorage.getItem('qatta_theme') || 'dark'; }catch(e){}
+  document.documentElement.setAttribute('data-theme', t);
+  document.getElementById('themeToggle').textContent = t === 'dark' ? '🌙' : '☀️';
+}
+document.getElementById('themeToggle').addEventListener('click', ()=>{
+  const cur = document.documentElement.getAttribute('data-theme');
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  document.getElementById('themeToggle').textContent = next === 'dark' ? '🌙' : '☀️';
+  try{ localStorage.setItem('qatta_theme', next); }catch(e){}
+});
+
+/* ---------- Session (localStorage) ---------- */
 function loadSessionFromLocalStorage(){
   try{
     const raw = localStorage.getItem('qatta_session');
@@ -784,16 +575,11 @@ onSnapshot(pinDocRef, snap=>{
   maybeRender();
 }, err=>console.error('pin listener error', err));
 
-async function savePin(pin){
-  await setDoc(pinDocRef, { value: pin });
-}
+async function savePin(pin){ await setDoc(pinDocRef, { value: pin }); }
 
 function ensureMonth(key){
-  if(!monthsData[key]){
-    monthsData[key] = { amount: DEFAULT_AMOUNT, payments:{} };
-  }
+  if(!monthsData[key]){ monthsData[key] = { amount: DEFAULT_AMOUNT, payments:{} }; }
   if(!monthsData[key].payments) monthsData[key].payments = {};
-  // make sure every current member has an entry (local display only)
   members.forEach(mem=>{
     if(!(mem.id in monthsData[key].payments)) monthsData[key].payments[mem.id] = false;
   });
@@ -811,33 +597,81 @@ function shiftMonth(key, delta){
   if(m<1){ m=12; y--; } if(m>12){ m=1; y++; }
   return y+'-'+String(m).padStart(2,'0');
 }
+function monthKeysSorted(){
+  return Object.keys(monthsData).sort();
+}
 
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+function initials(name){
+  const parts = name.trim().split(/\s+/);
+  return parts[0] ? parts[0][0] : '؟';
+}
+function colorForName(name){
+  let h = 0;
+  for(let i=0;i<name.length;i++) h = (h*31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+function avatarHtml(name){
+  return `<div class="avatar" style="background:${colorForName(name)}">${escapeHtml(initials(name))}</div>`;
+}
+function daysUntilNextOccurrence(mmdd){
+  const [mm,dd] = mmdd.split('-').map(Number);
+  const now = new Date();
+  let target = new Date(now.getFullYear(), mm-1, dd);
+  if(target < new Date(now.getFullYear(), now.getMonth(), now.getDate())){
+    target = new Date(now.getFullYear()+1, mm-1, dd);
+  }
+  return Math.round((target - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+}
+
+/* ---------- Render root ---------- */
 function render(){
   document.getElementById('memberCountSub').textContent =
     members.length ? `عدد الأعضاء: ${members.length}` : 'لا يوجد أعضاء بعد — أضفهم من تبويب "الأعضاء"';
+  renderDashboard();
   renderMonthly();
   renderMembers();
   renderOccasions();
+  renderArchive();
 }
 
+/* ---------- Monthly ---------- */
 function renderMonthly(){
   document.getElementById('monthLabel').textContent = formatMonthLabel(currentMonth);
   const md = ensureMonth(currentMonth);
   document.getElementById('amountInput').value = md.amount;
 
   const list = document.getElementById('memberPayList');
+  const query = (document.getElementById('monthlySearch').value || '').trim();
   list.innerHTML = '';
+  const filtered = members.filter(m=> !query || m.name.includes(query));
   if(members.length === 0){
     list.innerHTML = '<div class="empty">أضف أعضاء من تبويب "الأعضاء" أولاً</div>';
+  }else if(filtered.length === 0){
+    list.innerHTML = '<div class="empty">لا توجد نتائج مطابقة</div>';
   }
   let paidCount = 0;
-  members.forEach(mem=>{
+  members.forEach(mem=>{ if(md.payments[mem.id]) paidCount++; });
+
+  filtered.forEach(mem=>{
     const paid = !!md.payments[mem.id];
-    if(paid) paidCount++;
     const row = document.createElement('div');
     row.className = 'member-row';
+    let occBadge = '';
+    if(mem.occDate && /^\d{2}-\d{2}$/.test(mem.occDate)){
+      const d = daysUntilNextOccurrence(mem.occDate);
+      if(d <= 14) occBadge = `<span class="occ-badge">🎉 بعد ${d} يوم</span>`;
+    }
     row.innerHTML = `
-      <div class="m-name">${escapeHtml(mem.name)}</div>
+      ${avatarHtml(mem.name)}
+      <div class="m-main">
+        <div class="m-name">${escapeHtml(mem.name)}${occBadge}</div>
+        ${mem.note ? `<div class="m-note">${escapeHtml(mem.note)}</div>` : ''}
+      </div>
       <button class="pay-toggle ${paid?'paid':'unpaid'}" data-id="${mem.id}">
         <span class="stamp-mark">${paid?'✅':'⭕'}</span> ${paid?'قـطّ':'لم يقطّ'}
       </button>
@@ -855,6 +689,7 @@ function renderMonthly(){
       requireAuth(async ()=>{
         const id = btn.dataset.id;
         const newVal = !md.payments[id];
+        btn.classList.add('pop');
         try{
           await setDoc(doc(monthsCol, currentMonth), {
             amount: md.amount,
@@ -865,15 +700,24 @@ function renderMonthly(){
     });
   });
 }
+document.getElementById('monthlySearch').addEventListener('input', renderMonthly);
 
+/* ---------- Members ---------- */
 function renderMembers(){
   const list = document.getElementById('memberList');
+  const query = (document.getElementById('memberSearch').value || '').trim();
   list.innerHTML = '';
+  const filtered = members.filter(m=> !query || m.name.includes(query));
   if(members.length === 0){
     list.innerHTML = '<div class="empty">لا يوجد أعضاء مسجّلون بعد</div>';
     return;
   }
-  members.forEach((mem, idx)=>{
+  if(filtered.length === 0){
+    list.innerHTML = '<div class="empty">لا توجد نتائج مطابقة</div>';
+    return;
+  }
+  filtered.forEach(mem=>{
+    const idx = members.indexOf(mem);
     const row = document.createElement('div');
     row.className = 'member-list-row';
     row.innerHTML = `
@@ -881,8 +725,12 @@ function renderMembers(){
         <button class="reorder-btn" data-idx="${idx}" data-dir="-1" title="تحريك لأعلى" ${idx===0?'disabled':''}>▲</button>
         <button class="reorder-btn" data-idx="${idx}" data-dir="1" title="تحريك لأسفل" ${idx===members.length-1?'disabled':''}>▼</button>
       </div>
-      <div class="m-name" style="flex:1">${escapeHtml(mem.name)}</div>
-      <div class="m-occasion">${mem.occDate ? (mem.occLabel+' — '+mem.occDate) : 'بدون مناسبة مسجّلة'}</div>
+      ${avatarHtml(mem.name)}
+      <div class="m-main">
+        <div class="m-name">${escapeHtml(mem.name)}</div>
+        <div class="m-note">${mem.occDate ? (mem.occLabel+' — '+mem.occDate) : 'بدون مناسبة'}</div>
+      </div>
+      <input class="note-input" data-id="${mem.id}" placeholder="ملاحظة" value="${escapeHtml(mem.note||'')}">
       <button class="del" data-id="${mem.id}" title="حذف العضو">🗑️</button>
     `;
     list.appendChild(row);
@@ -904,85 +752,192 @@ function renderMembers(){
         const dir = Number(btn.dataset.dir);
         const otherIdx = idx + dir;
         if(otherIdx < 0 || otherIdx >= members.length) return;
-        const a = members[idx];
-        const b = members[otherIdx];
-        const aOrder = a.order ?? idx;
-        const bOrder = b.order ?? otherIdx;
+        const a = members[idx], b = members[otherIdx];
+        const aOrder = a.order ?? idx, bOrder = b.order ?? otherIdx;
         try{
           await setDoc(doc(membersCol, a.id), { order: bOrder }, { merge:true });
           await setDoc(doc(membersCol, b.id), { order: aOrder }, { merge:true });
-        }catch(e){ console.error('reorder member failed', e); alert('تعذّر تغيير الترتيب، تأكد من اتصالك بالإنترنت.'); }
+        }catch(e){ console.error('reorder failed', e); alert('تعذّر تغيير الترتيب.'); }
+      });
+    });
+  });
+  list.querySelectorAll('.note-input').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      requireAuth(async ()=>{
+        try{ await setDoc(doc(membersCol, inp.dataset.id), { note: inp.value }, { merge:true }); }
+        catch(e){ console.error('save note failed', e); alert('تعذّر حفظ الملاحظة.'); }
       });
     });
   });
 }
+document.getElementById('memberSearch').addEventListener('input', renderMembers);
 
-function daysUntilNextOccurrence(mmdd){
-  const [mm,dd] = mmdd.split('-').map(Number);
-  const now = new Date();
-  let target = new Date(now.getFullYear(), mm-1, dd);
-  if(target < new Date(now.getFullYear(), now.getMonth(), now.getDate())){
-    target = new Date(now.getFullYear()+1, mm-1, dd);
-  }
-  const diff = Math.round((target - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
-  return diff;
-}
-
+/* ---------- Occasions ---------- */
 function renderOccasions(){
   const withOcc = members.filter(m=>m.occDate && /^\d{2}-\d{2}$/.test(m.occDate));
   const upcoming = document.getElementById('upcomingOcc');
   const all = document.getElementById('allOcc');
-  upcoming.innerHTML = '';
-  all.innerHTML = '';
-
+  upcoming.innerHTML = ''; all.innerHTML = '';
   if(withOcc.length === 0){
     upcoming.innerHTML = '<div class="empty">لا توجد مناسبات مسجّلة بعد</div>';
     all.innerHTML = '<div class="empty">أضف تاريخ مناسبة عند إضافة العضو</div>';
     return;
   }
-
   const withDays = withOcc.map(m=>({...m, days: daysUntilNextOccurrence(m.occDate)}));
   withDays.sort((a,b)=>a.days-b.days);
-
   const soon = withDays.filter(m=>m.days<=60);
-  if(soon.length===0){
-    upcoming.innerHTML = '<div class="empty">لا توجد مناسبات خلال الـ 60 يوم القادمة</div>';
-  }
+  if(soon.length===0) upcoming.innerHTML = '<div class="empty">لا توجد مناسبات خلال الـ 60 يوم القادمة</div>';
   soon.forEach(m=>{
     const row = document.createElement('div');
     row.className = 'occ-row';
-    row.innerHTML = `
-      <div class="occ-date-badge">${m.occDate}</div>
-      <div style="flex:1">
-        <div class="m-name">${escapeHtml(m.name)}</div>
-        <div class="occ-days">${m.occLabel} — بعد ${m.days} يوم</div>
-      </div>
-    `;
+    row.innerHTML = `<div class="occ-date-badge">${m.occDate}</div>
+      <div style="flex:1"><div class="m-name">${escapeHtml(m.name)}</div><div class="occ-days">${m.occLabel} — بعد ${m.days} يوم</div></div>`;
     upcoming.appendChild(row);
   });
-
   withDays.forEach(m=>{
     const row = document.createElement('div');
     row.className = 'occ-row';
-    row.innerHTML = `
-      <div class="occ-date-badge">${m.occDate}</div>
-      <div style="flex:1">
-        <div class="m-name">${escapeHtml(m.name)}</div>
-        <div class="occ-days">${m.occLabel}</div>
-      </div>
-    `;
+    row.innerHTML = `<div class="occ-date-badge">${m.occDate}</div>
+      <div style="flex:1"><div class="m-name">${escapeHtml(m.name)}</div><div class="occ-days">${m.occLabel}</div></div>`;
     all.appendChild(row);
   });
 }
 
-function escapeHtml(str){
-  const d = document.createElement('div');
-  d.textContent = str;
-  return d.innerHTML;
+/* ---------- Dashboard ---------- */
+function svgPie(paid, total){
+  if(total === 0){
+    return `<svg width="140" height="140" viewBox="0 0 140 140"><circle cx="70" cy="70" r="60" fill="none" stroke="var(--card-border)" stroke-width="20"/></svg>`;
+  }
+  const pct = paid/total;
+  const r = 55, cx = 70, cy = 70, circ = 2*Math.PI*r;
+  const paidLen = circ*pct;
+  return `<svg width="140" height="140" viewBox="0 0 140 140">
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--bad)" stroke-width="20"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--ok)" stroke-width="20"
+      stroke-dasharray="${paidLen} ${circ-paidLen}" stroke-dashoffset="${circ/4}" transform="rotate(0 ${cx} ${cy})" stroke-linecap="round"/>
+    <text x="70" y="76" text-anchor="middle" font-size="22" font-weight="900" fill="var(--card-text)">${Math.round(pct*100)}%</text>
+  </svg>`;
+}
+function svgBar(labels, values){
+  const w = 260, h = 140, pad = 24;
+  const max = Math.max(1, ...values);
+  const barW = (w - pad*2) / (values.length || 1) - 8;
+  let bars = '';
+  values.forEach((v,i)=>{
+    const bh = (v/max) * (h - pad*2);
+    const x = pad + i*(barW+8);
+    const y = h - pad - bh;
+    bars += `<rect x="${x}" y="${y}" width="${barW}" height="${bh}" rx="3" fill="var(--copper)"/>
+      <text x="${x+barW/2}" y="${h-6}" text-anchor="middle" font-size="9" fill="var(--card-sub)">${labels[i]}</text>`;
+  });
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${bars}</svg>`;
+}
+function renderDashboard(){
+  const md = ensureMonth(currentMonth);
+  let paidCount = 0;
+  members.forEach(m=>{ if(md.payments[m.id]) paidCount++; });
+  document.getElementById('dashMonthLabel').textContent = formatMonthLabel(currentMonth);
+  document.getElementById('dashCollected').textContent = (paidCount*md.amount).toLocaleString('ar-SA') + ' ر.س';
+  document.getElementById('dashExpected').textContent = (members.length*md.amount).toLocaleString('ar-SA') + ' ر.س';
+  document.getElementById('dashPaidCount').textContent = paidCount;
+  document.getElementById('dashUnpaidCount').textContent = members.length - paidCount;
+
+  document.getElementById('pieChartHolder').innerHTML = svgPie(paidCount, members.length);
+
+  const keys = monthKeysSorted().slice(-6);
+  const labels = keys.map(k=>{ const [y,m]=k.split('-'); return monthNames[Number(m)-1].slice(0,3); });
+  const values = keys.map(k=>{
+    const d = monthsData[k];
+    if(!d) return 0;
+    const paid = Object.values(d.payments||{}).filter(Boolean).length;
+    return paid * (d.amount||0);
+  });
+  document.getElementById('barChartHolder').innerHTML = keys.length
+    ? svgBar(labels, values)
+    : '<div class="empty">لا توجد بيانات كافية بعد</div>';
+
+  // Top members by payment ratio across all months
+  const allKeys = monthKeysSorted();
+  const scoreMap = {};
+  members.forEach(m=> scoreMap[m.id] = { paid:0, total:0, name:m.name });
+  allKeys.forEach(k=>{
+    const d = monthsData[k];
+    members.forEach(m=>{
+      if(m.id in (d.payments||{})){
+        scoreMap[m.id].total++;
+        if(d.payments[m.id]) scoreMap[m.id].paid++;
+      }
+    });
+  });
+  const ranked = Object.values(scoreMap).filter(s=>s.total>0)
+    .sort((a,b)=> (b.paid/b.total) - (a.paid/a.total)).slice(0,5);
+  const topList = document.getElementById('topMembersList');
+  topList.innerHTML = ranked.length ? '' : '<div class="empty">لا توجد بيانات كافية بعد</div>';
+  ranked.forEach((r,i)=>{
+    const li = document.createElement('li');
+    li.innerHTML = `<span><span class="rank-badge">${i+1}</span>${escapeHtml(r.name)}</span><span>${Math.round(r.paid/r.total*100)}%</span>`;
+    topList.appendChild(li);
+  });
+
+  // Upcoming occasions preview (next 2)
+  const withOcc = members.filter(m=>m.occDate && /^\d{2}-\d{2}$/.test(m.occDate))
+    .map(m=>({...m, days: daysUntilNextOccurrence(m.occDate)})).sort((a,b)=>a.days-b.days).slice(0,3);
+  const dashOcc = document.getElementById('dashOcc');
+  dashOcc.innerHTML = withOcc.length ? '' : '<div class="empty">لا توجد مناسبات قريبة</div>';
+  withOcc.forEach(m=>{
+    const row = document.createElement('div');
+    row.className = 'occ-row';
+    row.innerHTML = `<div class="occ-date-badge">${m.occDate}</div>
+      <div style="flex:1"><div class="m-name">${escapeHtml(m.name)}</div><div class="occ-days">${m.occLabel} — بعد ${m.days} يوم</div></div>`;
+    dashOcc.appendChild(row);
+  });
 }
 
-/* ---------- Auth / Session ---------- */
+/* ---------- Archive ---------- */
+function renderArchive(){
+  const body = document.getElementById('archiveBody');
+  body.innerHTML = '';
+  const keys = monthKeysSorted().reverse();
+  if(keys.length === 0){
+    body.innerHTML = '<tr><td colspan="5" class="empty">لا يوجد سجل بعد</td></tr>';
+    return;
+  }
+  keys.forEach(k=>{
+    const d = monthsData[k];
+    const paid = Object.values(d.payments||{}).filter(Boolean).length;
+    const total = Object.keys(d.payments||{}).length;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${formatMonthLabel(k)}</td><td>${paid}</td><td>${total-paid}</td>
+      <td>${(paid*(d.amount||0)).toLocaleString('ar-SA')}</td><td>${(total*(d.amount||0)).toLocaleString('ar-SA')}</td>`;
+    body.appendChild(tr);
+  });
+}
 
+/* ---------- Export (SheetJS) ---------- */
+function exportMonth(){
+  const md = ensureMonth(currentMonth);
+  const rows = members.map(m=>({ 'الاسم': m.name, 'الحالة': md.payments[m.id] ? 'قطّ' : 'لم يقطّ', 'المبلغ': md.payments[m.id] ? md.amount : 0 }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, formatMonthLabel(currentMonth));
+  XLSX.writeFile(wb, `قطة_${currentMonth}.xlsx`);
+}
+function exportAll(){
+  const wb = XLSX.utils.book_new();
+  const keys = monthKeysSorted();
+  if(keys.length === 0){ alert('لا يوجد سجل بعد للتصدير'); return; }
+  keys.forEach(k=>{
+    const d = monthsData[k];
+    const rows = members.map(m=>({ 'الاسم': m.name, 'الحالة': (d.payments||{})[m.id] ? 'قطّ' : 'لم يقطّ', 'المبلغ': (d.payments||{})[m.id] ? (d.amount||0) : 0 }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, k);
+  });
+  XLSX.writeFile(wb, `سجل_قطة_الاستراحة.xlsx`);
+}
+document.getElementById('exportMonthBtn').addEventListener('click', exportMonth);
+document.getElementById('exportAllBtn').addEventListener('click', exportAll);
+
+/* ---------- Auth / Session ---------- */
 function renderSessionBar(){
   const who = document.getElementById('sessionWho');
   const loginBtn = document.getElementById('loginBtn');
@@ -990,30 +945,18 @@ function renderSessionBar(){
   const changePinBtn = document.getElementById('changePinBtn');
   if(session && session.name){
     who.innerHTML = `مسجّل باسم: <b>${escapeHtml(session.name)}</b> — يمكنك التعديل`;
-    loginBtn.style.display = 'none';
-    logoutBtn.style.display = 'inline';
-    changePinBtn.style.display = 'inline';
+    loginBtn.style.display = 'none'; logoutBtn.style.display = 'inline'; changePinBtn.style.display = 'inline';
   }else{
     who.textContent = 'وضع القراءة فقط — التعديل يحتاج رمز الدخول';
-    loginBtn.style.display = 'inline';
-    logoutBtn.style.display = 'none';
-    changePinBtn.style.display = 'none';
+    loginBtn.style.display = 'inline'; logoutBtn.style.display = 'none'; changePinBtn.style.display = 'none';
   }
 }
-
-// Wrap any data-changing action: if logged in, run immediately; otherwise open the login modal
-// and re-run the action automatically after a successful login.
 function requireAuth(action){
-  if(session && session.name){
-    action();
-  }else{
-    pendingAction = action;
-    openLoginModal();
-  }
+  if(session && session.name){ action(); }
+  else{ pendingAction = action; openLoginModal(); }
 }
-
 function openLoginModal(){
-  const isSetup = !accessPin; // no pin created yet on this shared board
+  const isSetup = !accessPin;
   document.getElementById('modalTitle').textContent = isSetup ? 'إنشاء رمز دخول للاستراحة' : 'تسجيل الدخول';
   document.getElementById('modalHint').textContent = isSetup
     ? 'لم يتم إنشاء رمز دخول بعد. أدخل اسمك وأنشئ رمزاً (٤ أرقام أو أكثر) ليستخدمه كل أعضاء الاستراحة للتعديل.'
@@ -1033,12 +976,9 @@ function closeLoginModal(){
   document.getElementById('loginModal').classList.add('hidden');
   pendingAction = null;
 }
-
 document.getElementById('loginBtn').addEventListener('click', openLoginModal);
 document.getElementById('modalCancel').addEventListener('click', closeLoginModal);
-document.getElementById('logoutBtn').addEventListener('click', ()=>{
-  clearSessionLocalStorage();
-});
+document.getElementById('logoutBtn').addEventListener('click', ()=> clearSessionLocalStorage());
 document.getElementById('changePinBtn').addEventListener('click', ()=>{
   requireAuth(async ()=>{
     const current = prompt('أدخل رمز الدخول الحالي للتأكيد:');
@@ -1047,22 +987,17 @@ document.getElementById('changePinBtn').addEventListener('click', ()=>{
     const next = prompt('أدخل رمز الدخول الجديد (٤ أرقام أو أكثر):');
     if(next === null) return;
     if(!next || next.trim().length < 4){ alert('الرمز الجديد يجب أن يكون ٤ خانات على الأقل.'); return; }
-    try{
-      await savePin(next.trim());
-      alert('تم تحديث رمز الدخول. أخبر بقية الأعضاء بالرمز الجديد.');
-    }catch(e){ console.error('change pin failed', e); alert('تعذّر حفظ الرمز الجديد، تأكد من اتصالك بالإنترنت.'); }
+    try{ await savePin(next.trim()); alert('تم تحديث رمز الدخول. أخبر بقية الأعضاء بالرمز الجديد.'); }
+    catch(e){ console.error('change pin failed', e); alert('تعذّر حفظ الرمز الجديد.'); }
   });
 });
-
 document.getElementById('modalSubmit').addEventListener('click', async ()=>{
   const name = document.getElementById('loginName').value.trim();
   const pin = document.getElementById('loginPin').value.trim();
   const errEl = document.getElementById('modalError');
   const isSetup = !accessPin;
-
   if(!name){ errEl.textContent = 'الرجاء إدخال اسمك.'; return; }
   if(!pin){ errEl.textContent = 'الرجاء إدخال رمز الدخول.'; return; }
-
   try{
     if(isSetup){
       const confirmPin = document.getElementById('loginPinConfirm').value.trim();
@@ -1079,17 +1014,12 @@ document.getElementById('modalSubmit').addEventListener('click', async ()=>{
     errEl.textContent = 'تعذّر الاتصال بقاعدة البيانات، تأكد من اتصالك بالإنترنت.';
     return;
   }
-
   renderSessionBar();
-  closeLoginModalKeepPending();
+  document.getElementById('loginModal').classList.add('hidden');
   if(pendingAction){ const fn = pendingAction; pendingAction = null; fn(); }
 });
 
-function closeLoginModalKeepPending(){
-  document.getElementById('loginModal').classList.add('hidden');
-}
-
-// Tabs
+/* ---------- Tabs ---------- */
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
@@ -1099,48 +1029,38 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   });
 });
 
-// Month nav
-document.getElementById('prevMonth').addEventListener('click', ()=>{
-  currentMonth = shiftMonth(currentMonth, -1);
-  renderMonthly();
-});
-document.getElementById('nextMonth').addEventListener('click', ()=>{
-  currentMonth = shiftMonth(currentMonth, 1);
-  renderMonthly();
-});
+/* ---------- Month nav ---------- */
+document.getElementById('prevMonth').addEventListener('click', ()=>{ currentMonth = shiftMonth(currentMonth, -1); renderMonthly(); renderDashboard(); });
+document.getElementById('nextMonth').addEventListener('click', ()=>{ currentMonth = shiftMonth(currentMonth, 1); renderMonthly(); renderDashboard(); });
 document.getElementById('amountInput').addEventListener('change', (e)=>{
   const newVal = Number(e.target.value) || 0;
   requireAuth(async ()=>{
-    try{
-      await setDoc(doc(monthsCol, currentMonth), { amount: newVal }, { merge:true });
-    }catch(e){ console.error('save amount failed', e); alert('تعذّر حفظ التغيير، تأكد من اتصالك بالإنترنت.'); }
+    try{ await setDoc(doc(monthsCol, currentMonth), { amount: newVal }, { merge:true }); }
+    catch(e){ console.error('save amount failed', e); alert('تعذّر حفظ التغيير.'); }
   });
 });
 
-// Add member
+/* ---------- Add member ---------- */
 document.getElementById('addMemberBtn').addEventListener('click', ()=>{
   requireAuth(async ()=>{
     const nameEl = document.getElementById('newMemberName');
     const occEl = document.getElementById('newMemberOcc');
     const occLabelEl = document.getElementById('newMemberOccLabel');
+    const noteEl = document.getElementById('newMemberNote');
     const name = nameEl.value.trim();
     if(!name){ nameEl.focus(); return; }
     let occDate = occEl.value.trim();
-    if(occDate && !/^\d{2}-\d{2}$/.test(occDate)){
-      alert('صيغة التاريخ يجب أن تكون شهر-يوم مثل 09-15');
-      return;
-    }
+    if(occDate && !/^\d{2}-\d{2}$/.test(occDate)){ alert('صيغة التاريخ يجب أن تكون شهر-يوم مثل 09-15'); return; }
     const nextOrder = members.length ? Math.max(...members.map(m=>m.order ?? 0)) + 1 : 0;
     try{
-      await setDoc(doc(membersCol, uid()), { name, occDate: occDate || '', occLabel: occLabelEl.value, order: nextOrder });
-      nameEl.value = ''; occEl.value = '';
-    }catch(e){ console.error('add member failed', e); alert('تعذّر إضافة العضو، تأكد من اتصالك بالإنترنت.'); }
+      await setDoc(doc(membersCol, uid()), { name, occDate: occDate || '', occLabel: occLabelEl.value, note: noteEl.value.trim(), order: nextOrder });
+      nameEl.value=''; occEl.value=''; noteEl.value='';
+    }catch(e){ console.error('add member failed', e); alert('تعذّر إضافة العضو.'); }
   });
 });
 
+loadTheme();
 loadSessionFromLocalStorage();
-
 </script>
-
-
-</body></html>
+</body>
+</html>
