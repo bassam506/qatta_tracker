@@ -402,15 +402,20 @@
         </div>
       </div>
       <div class="card">
-        <h2>تطوّر التحصيل (آخر 6 أشهر)</h2>
-        <div id="barChartHolder"></div>
+        <h2>من لم يقطّ بعد ⏱️</h2>
+        <div id="unpaidDashList"></div>
       </div>
     </div>
 
     <div class="card-grid">
       <div class="card">
-        <h2>الأكثر التزامًا</h2>
-        <ol class="stat-list" id="topMembersList" style="list-style:none;"></ol>
+        <h2>نسبة الالتزام العامة</h2>
+        <div class="dash-hero" style="justify-content:center;">
+          <div style="text-align:center;">
+            <div class="dash-big" id="complianceRate" style="color:var(--ok)">0%</div>
+            <div class="dash-label">من إجمالي القطات المستحقة عبر كل الأشهر</div>
+          </div>
+        </div>
       </div>
       <div class="card">
         <h2>مناسبات قريبة</h2>
@@ -442,7 +447,8 @@
 
       <div class="search-box"><input type="text" id="monthlySearch" placeholder="ابحث عن عضو..."></div>
       <div id="memberPayList"></div>
-      <div style="margin-top:12px;">
+      <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn" id="shareImageBtn">📸 مشاركة صورة القطة</button>
         <button class="btn secondary" id="exportMonthBtn">⬇️ تصدير هذا الشهر لإكسل</button>
       </div>
     </div>
@@ -1003,40 +1009,47 @@ function renderDashboard(){
 
   document.getElementById('pieChartHolder').innerHTML = svgPie(paidCount, members.length);
 
-  const keys = monthKeysSorted().slice(-6);
-  const labels = keys.map(k=>{ const [y,m]=k.split('-'); return monthNames[Number(m)-1].slice(0,3); });
-  const values = keys.map(k=>{
-    const d = monthsData[k];
-    if(!d) return 0;
-    const paid = Object.values(d.payments||{}).filter(Boolean).length;
-    return paid * (d.amount||0);
+  const late = lateDaysFor(currentMonth);
+  const unpaidList = members.filter(m=> !md.payments[m.id]);
+  const unpaidHolder = document.getElementById('unpaidDashList');
+  unpaidHolder.innerHTML = unpaidList.length ? '' : '<div class="empty">🎉 كل الأعضاء قطّوا هذا الشهر!</div>';
+  unpaidList.forEach(mem=>{
+    const row = document.createElement('div');
+    row.className = 'member-row';
+    const lateBadge = (late !== null && late > 0) ? `<span class="late-badge">⏱️ متأخر ${late} يوم</span>` : '';
+    row.innerHTML = `
+      ${avatarHtml(mem.name)}
+      <div class="m-main"><div class="m-name">${escapeHtml(mem.name)}${lateBadge}</div></div>
+      <button class="pay-toggle unpaid" data-id="${mem.id}"><span class="stamp-mark">⭕</span> لم يقطّ</button>
+    `;
+    unpaidHolder.appendChild(row);
   });
-  document.getElementById('barChartHolder').innerHTML = keys.length
-    ? svgBar(labels, values)
-    : '<div class="empty">لا توجد بيانات كافية بعد</div>';
-
-  // Top members by payment ratio across all months
-  const allKeys = monthKeysSorted();
-  const scoreMap = {};
-  members.forEach(m=> scoreMap[m.id] = { paid:0, total:0, name:m.name });
-  allKeys.forEach(k=>{
-    const d = monthsData[k];
-    members.forEach(m=>{
-      if(m.id in (d.payments||{})){
-        scoreMap[m.id].total++;
-        if(d.payments[m.id]) scoreMap[m.id].paid++;
-      }
+  unpaidHolder.querySelectorAll('.pay-toggle').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      requireAuth(async ()=>{
+        const id = btn.dataset.id;
+        try{
+          await setDoc(doc(monthsCol, currentMonth), {
+            amount: md.amount,
+            payments: { ...md.payments, [id]: true }
+          }, { merge:true });
+        }catch(e){ console.error('save payment failed', e); alert('تعذّر حفظ التغيير.'); }
+      });
     });
   });
-  const ranked = Object.values(scoreMap).filter(s=>s.total>0)
-    .sort((a,b)=> (b.paid/b.total) - (a.paid/a.total)).slice(0,5);
-  const topList = document.getElementById('topMembersList');
-  topList.innerHTML = ranked.length ? '' : '<div class="empty">لا توجد بيانات كافية بعد</div>';
-  ranked.forEach((r,i)=>{
-    const li = document.createElement('li');
-    li.innerHTML = `<span><span class="rank-badge">${i+1}</span>${escapeHtml(r.name)}</span><span>${Math.round(r.paid/r.total*100)}%</span>`;
-    topList.appendChild(li);
+
+  // Overall compliance rate across all months and members
+  const allKeys = monthKeysSorted();
+  let totalPaid = 0, totalExpected = 0;
+  allKeys.forEach(k=>{
+    const d = monthsData[k];
+    const payValues = Object.values(d.payments||{});
+    totalExpected += payValues.length;
+    totalPaid += payValues.filter(Boolean).length;
   });
+  document.getElementById('complianceRate').textContent = totalExpected > 0
+    ? Math.round(totalPaid/totalExpected*100) + '%'
+    : '—';
 
   // Upcoming occasions preview (next 2)
   const withOcc = members.filter(m=>m.occDate && /^\d{2}-\d{2}$/.test(m.occDate))
@@ -1129,6 +1142,177 @@ document.getElementById('saveRotationBtn').addEventListener('click', ()=>{
     }catch(e){ console.error('save rotation failed', e); alert('تعذّر الحفظ.'); }
   });
 });
+
+/* ---------- Share image (canvas + Web Share API) ---------- */
+function roundRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+}
+async function buildShareCanvas(){
+  if(document.fonts && document.fonts.ready) await document.fonts.ready;
+  const md = ensureMonth(currentMonth);
+  const paidMembers = members.filter(m=>md.payments[m.id]);
+  const unpaidMembers = members.filter(m=>!md.payments[m.id]);
+  const late = lateDaysFor(currentMonth);
+
+  const W = 1080;
+  const marginX = 64;
+  const colGap = 28;
+  const colW = (W - marginX*2 - colGap)/2;
+  const rowH = 56;
+  const listTop = 400;
+  const maxRows = Math.max(paidMembers.length, unpaidMembers.length, 1);
+  const H = listTop + maxRows*rowH + 190;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.direction = 'rtl';
+
+  // Background gradient
+  const bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0, '#16342a');
+  bg.addColorStop(1, '#0e2620');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,W,H);
+
+  // Warm glow accent
+  const glow = ctx.createRadialGradient(W*0.82, 70, 10, W*0.82, 70, 420);
+  glow.addColorStop(0, 'rgba(224,167,92,0.20)');
+  glow.addColorStop(1, 'rgba(224,167,92,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0,0,W,H);
+
+  // Faint ledger ruled lines texture
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = 1;
+  for(let y=0; y<H; y+=38){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+  // Outer frame
+  ctx.strokeStyle = 'rgba(224,167,92,0.35)';
+  ctx.lineWidth = 3;
+  roundRect(ctx, 20, 20, W-40, H-40, 24);
+  ctx.stroke();
+
+  // Title
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#e0a75c';
+  ctx.font = "700 62px 'Markazi Text', 'Cairo', sans-serif";
+  ctx.fillText('💰 استراحة الدرعية', W/2, 105);
+
+  ctx.font = "600 34px 'Cairo', sans-serif";
+  ctx.fillStyle = '#dce7de';
+  ctx.fillText(`قطة شهر ${formatMonthLabel(currentMonth)}`, W/2, 155);
+
+  ctx.strokeStyle = '#2b5346';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(marginX, 185); ctx.lineTo(W-marginX, 185); ctx.stroke();
+
+  // Stat summary
+  const totalCollected = paidMembers.length * md.amount;
+  const totalExpected = members.length * md.amount;
+  ctx.font = "900 50px 'Cairo', sans-serif";
+  ctx.fillStyle = '#f3ecd8';
+  ctx.fillText(`${totalCollected.toLocaleString('ar-SA')} / ${totalExpected.toLocaleString('ar-SA')} ر.س`, W/2, 255);
+  ctx.font = "400 26px 'Cairo', sans-serif";
+  ctx.fillStyle = '#9fb0a3';
+  ctx.fillText('إجمالي المحصّل من إجمالي المتوقع', W/2, 292);
+
+  const pct = members.length ? Math.round(paidMembers.length/members.length*100) : 0;
+  ctx.font = "700 30px 'Cairo', sans-serif";
+  ctx.fillStyle = '#4f7d5a';
+  ctx.fillText(`✅ قطّوا: ${paidMembers.length}`, W/2 - 150, 340);
+  ctx.fillStyle = '#c97a68';
+  ctx.fillText(`⭕ ما قطّوا: ${unpaidMembers.length}`, W/2 + 150, 340);
+
+  // Column headers (RTL: paid column on the right, unpaid on the left)
+  const rightColX0 = W - marginX - colW;
+  const leftColX0 = marginX;
+  const rightCenterX = rightColX0 + colW/2;
+  const leftCenterX = leftColX0 + colW/2;
+
+  ctx.font = "700 30px 'Cairo', sans-serif";
+  ctx.fillStyle = '#4f7d5a';
+  ctx.fillText(`✅ قطّوا (${paidMembers.length})`, rightCenterX, listTop - 20);
+  ctx.fillStyle = '#c97a68';
+  ctx.fillText(`⭕ ما قطّوا (${unpaidMembers.length})`, leftCenterX, listTop - 20);
+
+  ctx.font = "500 26px 'Cairo', sans-serif";
+  paidMembers.forEach((m,i)=>{
+    const y = listTop + i*rowH;
+    ctx.fillStyle = 'rgba(79,125,90,0.18)';
+    roundRect(ctx, rightColX0, y, colW, rowH-14, 10);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(79,125,90,0.5)';
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, rightColX0, y, colW, rowH-14, 10);
+    ctx.stroke();
+    ctx.fillStyle = '#eef5ef';
+    ctx.textAlign = 'center';
+    ctx.fillText(m.name, rightCenterX, y + (rowH-14)/2 + 9);
+  });
+  unpaidMembers.forEach((m,i)=>{
+    const y = listTop + i*rowH;
+    ctx.fillStyle = 'rgba(163,74,58,0.18)';
+    roundRect(ctx, leftColX0, y, colW, rowH-14, 10);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(163,74,58,0.5)';
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, leftColX0, y, colW, rowH-14, 10);
+    ctx.stroke();
+    ctx.fillStyle = '#f7e9e5';
+    ctx.textAlign = 'center';
+    const lateSuffix = (late !== null && late > 0) ? ` (${late}ي)` : '';
+    ctx.fillText(m.name + lateSuffix, leftCenterX, y + (rowH-14)/2 + 9);
+  });
+
+  // Footer
+  const now = new Date();
+  ctx.font = "400 22px 'Cairo', sans-serif";
+  ctx.fillStyle = '#7f8f83';
+  ctx.textAlign = 'center';
+  ctx.fillText(`أُنشئت تلقائيًا من تطبيق استراحة الدرعية — ${now.toLocaleDateString('ar-SA')}`, W/2, H-40);
+
+  return canvas;
+}
+async function shareTodayImage(){
+  const btn = document.getElementById('shareImageBtn');
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ جاري التجهيز...';
+  btn.disabled = true;
+  try{
+    const canvas = await buildShareCanvas();
+    canvas.toBlob(async (blob)=>{
+      btn.textContent = originalText;
+      btn.disabled = false;
+      if(!blob){ alert('تعذّر إنشاء الصورة.'); return; }
+      const fileName = `قطة_${currentMonth}.png`;
+      const file = new File([blob], fileName, { type:'image/png' });
+      if(navigator.canShare && navigator.canShare({ files:[file] })){
+        try{
+          await navigator.share({ files:[file], title:'قطة استراحة الدرعية', text:`تحديث قطة ${formatMonthLabel(currentMonth)}` });
+        }catch(e){ /* user cancelled share, ignore */ }
+      }else{
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = fileName; a.click();
+        URL.revokeObjectURL(url);
+        alert('متصفحك لا يدعم المشاركة المباشرة، تم تنزيل الصورة بدلاً من ذلك — شاركها يدويًا عبر واتساب.');
+      }
+    }, 'image/png');
+  }catch(e){
+    console.error('build share image failed', e);
+    btn.textContent = originalText;
+    btn.disabled = false;
+    alert('تعذّر إنشاء الصورة.');
+  }
+}
+document.getElementById('shareImageBtn').addEventListener('click', shareTodayImage);
 
 /* ---------- Export (SheetJS) ---------- */
 function exportMonth(){
