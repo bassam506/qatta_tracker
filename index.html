@@ -139,6 +139,17 @@
     font-size:.68rem; background:var(--bad); color:#fff; border-radius:999px;
     padding:2px 8px; margin-inline-start:6px; white-space:nowrap;
   }
+  .exempt-btn{
+    background:none; border:1px solid var(--card-border); color:var(--card-sub); cursor:pointer;
+    border-radius:8px; width:34px; height:34px; font-size:.9rem; flex-shrink:0;
+  }
+  .exempt-btn:hover{ border-color:var(--bad); color:var(--bad); }
+  .exempt-section-header{
+    font-size:.78rem; color:var(--card-sub); font-weight:700; margin:14px 0 6px; padding-top:10px;
+    border-top:1px dashed var(--card-border);
+  }
+  .exempt-row{ opacity:.65; }
+  .restore-btn{ font-size:.76rem; padding:6px 10px; flex-shrink:0; }
   .edit-name-input{
     font-weight:700; border:1px solid transparent; background:transparent; color:var(--card-text);
     font-family:'Cairo'; font-size:.95rem; padding:2px 4px; border-radius:4px; width:100%;
@@ -671,12 +682,24 @@ onSnapshot(rotationCol, snap=>{
 async function savePin(pin){ await setDoc(pinDocRef, { value: pin }); }
 
 function ensureMonth(key){
-  if(!monthsData[key]){ monthsData[key] = { amount: DEFAULT_AMOUNT, payments:{} }; }
+  if(!monthsData[key]){ monthsData[key] = { amount: DEFAULT_AMOUNT, payments:{}, exempt:{} }; }
   if(!monthsData[key].payments) monthsData[key].payments = {};
+  if(!monthsData[key].exempt) monthsData[key].exempt = {};
   members.forEach(mem=>{
     if(!(mem.id in monthsData[key].payments)) monthsData[key].payments[mem.id] = false;
   });
   return monthsData[key];
+}
+function isExempt(md, memberId){
+  return !!(md && md.exempt && md.exempt[memberId]);
+}
+function activeStatsForMonth(monthKey){
+  const d = monthsData[monthKey] || {};
+  const exempt = d.exempt || {};
+  const payments = d.payments || {};
+  const activeIds = Object.keys(payments).filter(id=>!exempt[id]);
+  const paidCount = activeIds.filter(id=>payments[id]).length;
+  return { activeIds, paidCount, total: activeIds.length, amount: d.amount||0 };
 }
 
 const monthNames = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
@@ -768,8 +791,10 @@ function renderMonthly(){
   const query = (document.getElementById('monthlySearch').value || '').trim();
   list.innerHTML = '';
   const filtered = members.filter(m=> !query || m.name.includes(query));
+  const activeFiltered = filtered.filter(m=> !isExempt(md, m.id));
+  const exemptFiltered = filtered.filter(m=> isExempt(md, m.id));
   // Dynamic order: paid members rise to the top, unpaid sink to the bottom
-  const sortedFiltered = [...filtered].sort((a,b)=>{
+  const sortedFiltered = [...activeFiltered].sort((a,b)=>{
     const pa = md.payments[a.id] ? 1 : 0;
     const pb = md.payments[b.id] ? 1 : 0;
     return pb - pa;
@@ -779,8 +804,9 @@ function renderMonthly(){
   }else if(filtered.length === 0){
     list.innerHTML = '<div class="empty">لا توجد نتائج مطابقة</div>';
   }
+  const activeMembers = members.filter(m=> !isExempt(md, m.id));
   let paidCount = 0;
-  members.forEach(mem=>{ if(md.payments[mem.id]) paidCount++; });
+  activeMembers.forEach(mem=>{ if(md.payments[mem.id]) paidCount++; });
   const late = lateDaysFor(currentMonth);
 
   sortedFiltered.forEach(mem=>{
@@ -805,14 +831,32 @@ function renderMonthly(){
       <button class="pay-toggle ${paid?'paid':'unpaid'}" data-id="${mem.id}">
         <span class="stamp-mark">${paid?'✅':'⭕'}</span> ${paid?'قـطّ':'لم يقطّ'}
       </button>
+      <button class="exempt-btn" data-id="${mem.id}" title="إعفاء من قطة هذا الشهر">🚫</button>
     `;
     list.appendChild(row);
   });
 
+  if(exemptFiltered.length){
+    const exemptHeader = document.createElement('div');
+    exemptHeader.className = 'exempt-section-header';
+    exemptHeader.textContent = `معفون من قطة ${formatMonthLabel(currentMonth)} (${exemptFiltered.length})`;
+    list.appendChild(exemptHeader);
+    exemptFiltered.forEach(mem=>{
+      const row = document.createElement('div');
+      row.className = 'member-row exempt-row';
+      row.innerHTML = `
+        ${avatarHtml(mem.name)}
+        <div class="m-main"><div class="m-name">${escapeHtml(mem.name)}</div></div>
+        <button class="btn secondary restore-btn" data-id="${mem.id}">↩️ إرجاع لهذا الشهر</button>
+      `;
+      list.appendChild(row);
+    });
+  }
+
   document.getElementById('statPaid').textContent = paidCount;
-  document.getElementById('statUnpaid').textContent = members.length - paidCount;
+  document.getElementById('statUnpaid').textContent = activeMembers.length - paidCount;
   document.getElementById('statTotal').textContent = (paidCount * md.amount).toLocaleString('ar-SA');
-  document.getElementById('statExpected').textContent = (members.length * md.amount).toLocaleString('ar-SA');
+  document.getElementById('statExpected').textContent = (activeMembers.length * md.amount).toLocaleString('ar-SA');
 
   list.querySelectorAll('.pay-toggle').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -826,6 +870,31 @@ function renderMonthly(){
             payments: { ...md.payments, [id]: newVal }
           }, { merge:true });
         }catch(e){ console.error('save payment failed', e); alert('تعذّر حفظ التغيير، تأكد من اتصالك بالإنترنت.'); }
+      });
+    });
+  });
+  list.querySelectorAll('.exempt-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      requireAuth(async ()=>{
+        const id = btn.dataset.id;
+        if(!confirm('إعفاء هذا العضو من قطة هذا الشهر فقط؟ (يمكن إرجاعه لاحقًا)')) return;
+        try{
+          await setDoc(doc(monthsCol, currentMonth), {
+            exempt: { ...md.exempt, [id]: true }
+          }, { merge:true });
+        }catch(e){ console.error('save exempt failed', e); alert('تعذّر الحفظ.'); }
+      });
+    });
+  });
+  list.querySelectorAll('.restore-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      requireAuth(async ()=>{
+        const id = btn.dataset.id;
+        try{
+          await setDoc(doc(monthsCol, currentMonth), {
+            exempt: { ...md.exempt, [id]: false }
+          }, { merge:true });
+        }catch(e){ console.error('restore member failed', e); alert('تعذّر الحفظ.'); }
       });
     });
   });
@@ -1018,18 +1087,19 @@ function renderMondayCard(){
 function renderDashboard(){
   renderMondayCard();
   const md = ensureMonth(currentMonth);
+  const activeMembers = members.filter(m=> !isExempt(md, m.id));
   let paidCount = 0;
-  members.forEach(m=>{ if(md.payments[m.id]) paidCount++; });
+  activeMembers.forEach(m=>{ if(md.payments[m.id]) paidCount++; });
   document.getElementById('dashMonthLabel').textContent = formatMonthLabel(currentMonth);
   document.getElementById('dashCollected').textContent = (paidCount*md.amount).toLocaleString('ar-SA') + ' ر.س';
-  document.getElementById('dashExpected').textContent = (members.length*md.amount).toLocaleString('ar-SA') + ' ر.س';
+  document.getElementById('dashExpected').textContent = (activeMembers.length*md.amount).toLocaleString('ar-SA') + ' ر.س';
   document.getElementById('dashPaidCount').textContent = paidCount;
-  document.getElementById('dashUnpaidCount').textContent = members.length - paidCount;
+  document.getElementById('dashUnpaidCount').textContent = activeMembers.length - paidCount;
 
-  document.getElementById('pieChartHolder').innerHTML = svgPie(paidCount, members.length);
+  document.getElementById('pieChartHolder').innerHTML = svgPie(paidCount, activeMembers.length);
 
   const late = lateDaysFor(currentMonth);
-  const unpaidList = members.filter(m=> !md.payments[m.id]);
+  const unpaidList = activeMembers.filter(m=> !md.payments[m.id]);
   const unpaidHolder = document.getElementById('unpaidDashList');
   unpaidHolder.innerHTML = unpaidList.length ? '' : '<div class="empty">🎉 كل الأعضاء قطّوا هذا الشهر!</div>';
   unpaidList.forEach(mem=>{
@@ -1057,14 +1127,13 @@ function renderDashboard(){
     });
   });
 
-  // Overall compliance rate across all months and members
+  // Overall compliance rate across all months and members (exempted entries excluded)
   const allKeys = monthKeysSorted();
   let totalPaid = 0, totalExpected = 0;
   allKeys.forEach(k=>{
-    const d = monthsData[k];
-    const payValues = Object.values(d.payments||{});
-    totalExpected += payValues.length;
-    totalPaid += payValues.filter(Boolean).length;
+    const stats = activeStatsForMonth(k);
+    totalExpected += stats.total;
+    totalPaid += stats.paidCount;
   });
   document.getElementById('complianceRate').textContent = totalExpected > 0
     ? Math.round(totalPaid/totalExpected*100) + '%'
@@ -1094,12 +1163,12 @@ function renderArchive(){
     return;
   }
   keys.forEach(k=>{
-    const d = monthsData[k];
-    const paid = Object.values(d.payments||{}).filter(Boolean).length;
-    const total = Object.keys(d.payments||{}).length;
+    const stats = activeStatsForMonth(k);
+    const paid = stats.paidCount;
+    const total = stats.total;
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${formatMonthLabel(k)}</td><td>${paid}</td><td>${total-paid}</td>
-      <td>${(paid*(d.amount||0)).toLocaleString('ar-SA')}</td><td>${(total*(d.amount||0)).toLocaleString('ar-SA')}</td>`;
+      <td>${(paid*stats.amount).toLocaleString('ar-SA')}</td><td>${(total*stats.amount).toLocaleString('ar-SA')}</td>`;
     body.appendChild(tr);
   });
 }
@@ -1189,8 +1258,9 @@ function roundRect(ctx, x, y, w, h, r){
 async function buildShareCanvas(){
   if(document.fonts && document.fonts.ready) await document.fonts.ready;
   const md = ensureMonth(currentMonth);
-  const paidMembers = members.filter(m=>md.payments[m.id]);
-  const unpaidMembers = members.filter(m=>!md.payments[m.id]);
+  const activeMembers = members.filter(m=> !isExempt(md, m.id));
+  const paidMembers = activeMembers.filter(m=>md.payments[m.id]);
+  const unpaidMembers = activeMembers.filter(m=>!md.payments[m.id]);
   const late = lateDaysFor(currentMonth);
 
   const W = 1080;
@@ -1248,7 +1318,7 @@ async function buildShareCanvas(){
 
   // Stat summary
   const totalCollected = paidMembers.length * md.amount;
-  const totalExpected = members.length * md.amount;
+  const totalExpected = activeMembers.length * md.amount;
   ctx.font = "900 50px 'Cairo', sans-serif";
   ctx.fillStyle = '#f3ecd8';
   ctx.fillText(`${totalCollected.toLocaleString('ar-SA')} / ${totalExpected.toLocaleString('ar-SA')} ر.س`, W/2, 255);
@@ -1256,7 +1326,7 @@ async function buildShareCanvas(){
   ctx.fillStyle = '#9fb0a3';
   ctx.fillText('إجمالي المحصّل من إجمالي المتوقع', W/2, 292);
 
-  const pct = members.length ? Math.round(paidMembers.length/members.length*100) : 0;
+  const pct = activeMembers.length ? Math.round(paidMembers.length/activeMembers.length*100) : 0;
   ctx.font = "700 30px 'Cairo', sans-serif";
   ctx.fillStyle = '#4f7d5a';
   ctx.fillText(`✅ قطّوا: ${paidMembers.length}`, W/2 - 150, 340);
@@ -1537,7 +1607,10 @@ document.getElementById('shareInviteBtn').addEventListener('click', shareInvite)
 /* ---------- Export (SheetJS) ---------- */
 function exportMonth(){
   const md = ensureMonth(currentMonth);
-  const rows = members.map(m=>({ 'الاسم': m.name, 'الحالة': md.payments[m.id] ? 'قطّ' : 'لم يقطّ', 'المبلغ': md.payments[m.id] ? md.amount : 0 }));
+  const rows = members.map(m=>{
+    const exempt = isExempt(md, m.id);
+    return { 'الاسم': m.name, 'الحالة': exempt ? 'معفى' : (md.payments[m.id] ? 'قطّ' : 'لم يقطّ'), 'المبلغ': (!exempt && md.payments[m.id]) ? md.amount : 0 };
+  });
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, formatMonthLabel(currentMonth));
@@ -1549,7 +1622,10 @@ function exportAll(){
   if(keys.length === 0){ alert('لا يوجد سجل بعد للتصدير'); return; }
   keys.forEach(k=>{
     const d = monthsData[k];
-    const rows = members.map(m=>({ 'الاسم': m.name, 'الحالة': (d.payments||{})[m.id] ? 'قطّ' : 'لم يقطّ', 'المبلغ': (d.payments||{})[m.id] ? (d.amount||0) : 0 }));
+    const rows = members.map(m=>{
+      const exempt = isExempt(d, m.id);
+      return { 'الاسم': m.name, 'الحالة': exempt ? 'معفى' : ((d.payments||{})[m.id] ? 'قطّ' : 'لم يقطّ'), 'المبلغ': (!exempt && (d.payments||{})[m.id]) ? (d.amount||0) : 0 };
+    });
     const ws = XLSX.utils.json_to_sheet(rows);
     XLSX.utils.book_append_sheet(wb, ws, k);
   });
