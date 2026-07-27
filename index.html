@@ -162,6 +162,19 @@
   }
   .exempt-row{ opacity:.65; }
   .restore-btn{ font-size:.76rem; padding:6px 10px; flex-shrink:0; }
+  .expense-row{
+    display:flex; align-items:center; gap:10px; padding:10px 4px; border-bottom:1px dashed var(--card-border);
+  }
+  .expense-row .exp-name{ font-weight:700; flex:1; }
+  .expense-row .exp-date{ font-size:.72rem; color:var(--card-sub); }
+  .expense-row .exp-amount{ font-weight:800; color:var(--bad); white-space:nowrap; }
+  .order-num-input{
+    width:44px; padding:4px 2px; border-radius:6px; border:1px solid var(--input-border);
+    font-family:'Cairo'; font-size:.8rem; background:var(--input-bg); color:var(--card-text); text-align:center;
+  }
+  .month-num-badge{
+    font-size:.72rem; color:var(--card-sub); font-weight:700; min-width:22px; text-align:center; flex-shrink:0;
+  }
   .edit-name-input{
     font-weight:700; border:1px solid transparent; background:transparent; color:var(--card-text);
     font-family:'Cairo'; font-size:.95rem; padding:2px 4px; border-radius:4px; width:100%;
@@ -386,6 +399,7 @@
     <button class="tab-btn" data-tab="occasions">المناسبات</button>
     <button class="tab-btn" data-tab="archive">الأرشيف</button>
     <button class="tab-btn" data-tab="rotation">دور عشاء الاثنين</button>
+    <button class="tab-btn" data-tab="expenses">المصروفات</button>
   </div>
 
   <!-- Dashboard Tab -->
@@ -554,6 +568,30 @@
     </div>
   </div>
 
+  <!-- Expenses Tab -->
+  <div class="panel" id="panel-expenses">
+    <div class="card">
+      <div class="summary-grid" style="grid-template-columns:repeat(3,1fr);">
+        <div class="stat good"><div class="n" id="expTotalCollected">0</div><div class="l">إجمالي المحصّل (ر.س)</div></div>
+        <div class="stat warn"><div class="n" id="expTotalSpent">0</div><div class="l">إجمالي المصروفات (ر.س)</div></div>
+        <div class="stat"><div class="n" id="expRemaining">0</div><div class="l">المتبقي (ر.س)</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>إضافة مصروف جديد</h2>
+      <div class="add-member-form">
+        <input type="text" id="newExpenseName" placeholder="اسم المصروف (مثال: صيانة المكيف)" style="flex:1; min-width:180px;">
+        <input type="number" id="newExpenseAmount" placeholder="المبلغ (ر.س)" min="0" step="1" style="width:140px;">
+        <input type="date" id="newExpenseDate">
+        <button class="btn" id="addExpenseBtn">إضافة المصروف</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>سجل المصروفات</h2>
+      <div id="expenseList"></div>
+    </div>
+  </div>
+
   <footer>هذا الدفتر مشترك بين جميع من يفتح هذا التطبيق — أي تعديل يظهر للجميع.</footer>
 </div>
 
@@ -597,10 +635,12 @@ const membersCol = collection(db, 'members');
 const monthsCol = collection(db, 'months');
 const pinDocRef = doc(db, 'config', 'pin');
 const rotationCol = collection(db, 'rotation');
+const expensesCol = collection(db, 'expenses');
 
 let members = [];
 let monthsData = {};
 let rotationData = {};
+let expensesData = [];
 let selectedRotationMemberIds = new Set();
 // القطة تبدأ تُجمع قبل الشهر المستهدف بأسبوع إلى أسبوع ونصف تقريبًا،
 // فإذا كنا في العشرين وما بعده من الشهر، الافتراضي يكون الشهر الجاي (لأن القطة الجارية فعليًا له).
@@ -619,7 +659,7 @@ const DEFAULT_AMOUNT = 100;
 let accessPin = null;
 let session = null;
 let pendingAction = null;
-const ready = { members:false, months:false, pin:false, rotation:false };
+const ready = { members:false, months:false, pin:false, rotation:false, expenses:false };
 const AVATAR_COLORS = ['#c08a44','#4f7d5a','#8c3a2b','#4a86a8','#7d5a9e','#a86b4a','#3f8f7a','#a84a6b'];
 
 function uid(){ return 'm_' + Math.random().toString(36).slice(2,9); }
@@ -658,7 +698,7 @@ function clearSessionLocalStorage(){
 }
 
 function maybeRender(){
-  if(ready.members && ready.months && ready.pin && ready.rotation){
+  if(ready.members && ready.months && ready.pin && ready.rotation && ready.expenses){
     render();
     renderSessionBar();
   }
@@ -690,6 +730,13 @@ onSnapshot(rotationCol, snap=>{
   ready.rotation = true;
   maybeRender();
 }, err=>console.error('rotation listener error', err));
+
+onSnapshot(expensesCol, snap=>{
+  expensesData = snap.docs.map(d=>({ id: d.id, ...d.data() }));
+  expensesData.sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+  ready.expenses = true;
+  maybeRender();
+}, err=>console.error('expenses listener error', err));
 
 async function savePin(pin){ await setDoc(pinDocRef, { value: pin }); }
 
@@ -780,6 +827,7 @@ function render(){
   renderOccasions();
   renderArchive();
   renderRotationTab();
+  renderExpenses();
 }
 
 /* ---------- Monthly ---------- */
@@ -834,7 +882,9 @@ function renderMonthly(){
     if(!paid && late !== null && late > 0){
       lateBadge = `<span class="late-badge">⏱️ متأخر ${late} يوم</span>`;
     }
+    const orderNum = members.findIndex(m=>m.id===mem.id) + 1;
     row.innerHTML = `
+      <div class="month-num-badge">${orderNum}</div>
       ${avatarHtml(mem.name)}
       <div class="m-main">
         <div class="m-name">${escapeHtml(mem.name)}${occBadge}${lateBadge}</div>
@@ -932,6 +982,7 @@ function renderMembers(){
     const row = document.createElement('div');
     row.className = 'member-list-row';
     row.innerHTML = `
+      <input type="number" class="order-num-input" data-id="${mem.id}" value="${idx+1}" min="1" max="${members.length}" title="رقم الترتيب">
       <div class="reorder-btns">
         <button class="reorder-btn" data-idx="${idx}" data-dir="-1" title="تحريك لأعلى" ${idx===0?'disabled':''}>▲</button>
         <button class="reorder-btn" data-idx="${idx}" data-dir="1" title="تحريك لأسفل" ${idx===members.length-1?'disabled':''}>▼</button>
@@ -1005,6 +1056,24 @@ function renderMembers(){
           await setDoc(doc(membersCol, a.id), { order: bOrder }, { merge:true });
           await setDoc(doc(membersCol, b.id), { order: aOrder }, { merge:true });
         }catch(e){ console.error('reorder failed', e); alert('تعذّر تغيير الترتيب.'); }
+      });
+    });
+  });
+  list.querySelectorAll('.order-num-input').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      requireAuth(async ()=>{
+        const id = inp.dataset.id;
+        let newPos = Math.round(Number(inp.value));
+        if(!newPos || newPos < 1) newPos = 1;
+        if(newPos > members.length) newPos = members.length;
+        const fromIdx = members.findIndex(m=>m.id===id);
+        if(fromIdx === -1) return;
+        const arr = [...members];
+        const [item] = arr.splice(fromIdx, 1);
+        arr.splice(newPos-1, 0, item);
+        try{
+          await Promise.all(arr.map((m,i)=> setDoc(doc(membersCol, m.id), { order:i }, { merge:true })));
+        }catch(e){ console.error('reorder by number failed', e); alert('تعذّر تغيير الترتيب.'); }
       });
     });
   });
@@ -1184,6 +1253,62 @@ function renderArchive(){
     body.appendChild(tr);
   });
 }
+
+/* ---------- Expenses ---------- */
+function totalCollectedAllTime(){
+  let total = 0;
+  monthKeysSorted().forEach(k=>{
+    const stats = activeStatsForMonth(k);
+    total += stats.paidCount * stats.amount;
+  });
+  return total;
+}
+function renderExpenses(){
+  const totalCollected = totalCollectedAllTime();
+  const totalSpent = expensesData.reduce((sum,e)=> sum + (Number(e.amount)||0), 0);
+  const remaining = totalCollected - totalSpent;
+  document.getElementById('expTotalCollected').textContent = totalCollected.toLocaleString('ar-SA');
+  document.getElementById('expTotalSpent').textContent = totalSpent.toLocaleString('ar-SA');
+  document.getElementById('expRemaining').textContent = remaining.toLocaleString('ar-SA');
+
+  const list = document.getElementById('expenseList');
+  list.innerHTML = expensesData.length ? '' : '<div class="empty">لا يوجد مصروفات مسجّلة بعد</div>';
+  expensesData.forEach(exp=>{
+    const row = document.createElement('div');
+    row.className = 'expense-row';
+    row.innerHTML = `
+      <div class="exp-name">${escapeHtml(exp.name)} <span class="exp-date">${exp.date||''}</span></div>
+      <div class="exp-amount">${(Number(exp.amount)||0).toLocaleString('ar-SA')} ر.س</div>
+      <button class="del" data-id="${exp.id}" title="حذف المصروف">🗑️</button>
+    `;
+    list.appendChild(row);
+  });
+  list.querySelectorAll('.del').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      requireAuth(async ()=>{
+        if(!confirm('حذف هذا المصروف؟')) return;
+        try{ await deleteDoc(doc(expensesCol, btn.dataset.id)); }
+        catch(e){ console.error('delete expense failed', e); alert('تعذّر الحذف.'); }
+      });
+    });
+  });
+}
+document.getElementById('addExpenseBtn').addEventListener('click', ()=>{
+  requireAuth(async ()=>{
+    const nameEl = document.getElementById('newExpenseName');
+    const amountEl = document.getElementById('newExpenseAmount');
+    const dateEl = document.getElementById('newExpenseDate');
+    const name = nameEl.value.trim();
+    const amount = Number(amountEl.value);
+    if(!name){ nameEl.focus(); return; }
+    if(!amount || amount <= 0){ alert('أدخل مبلغًا صحيحًا أكبر من صفر.'); return; }
+    const date = dateEl.value || dateToKey(new Date());
+    try{
+      await setDoc(doc(expensesCol, uid()), { name, amount, date });
+      nameEl.value=''; amountEl.value=''; dateEl.value='';
+    }catch(e){ console.error('add expense failed', e); alert('تعذّر إضافة المصروف.'); }
+  });
+});
 
 /* ---------- Rotation (Monday dinner turn) ---------- */
 function renderRotationTab(){
