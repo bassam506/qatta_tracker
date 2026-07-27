@@ -131,6 +131,27 @@
   [data-theme="light"] .month-switch button{ background:var(--copper); color:#fff; }
   .month-switch button:hover{ background:var(--stamp-red); }
   .month-label{ font-weight:700; font-size:1.1rem; min-width:140px; text-align:center; }
+  .month-picker-input{
+    padding:6px 8px; border-radius:6px; border:1px solid var(--input-border);
+    font-family:'Cairo'; font-size:.82rem; background:var(--input-bg); color:var(--card-text);
+  }
+  .late-badge{
+    font-size:.68rem; background:var(--bad); color:#fff; border-radius:999px;
+    padding:2px 8px; margin-inline-start:6px; white-space:nowrap;
+  }
+  .edit-name-input{
+    font-weight:700; border:1px solid transparent; background:transparent; color:var(--card-text);
+    font-family:'Cairo'; font-size:.95rem; padding:2px 4px; border-radius:4px; width:100%;
+  }
+  .edit-name-input:hover, .edit-name-input:focus{ border-color:var(--input-border); background:var(--input-bg); }
+  .edit-occ-row{ display:flex; gap:4px; margin-top:2px; }
+  .edit-occ-input, .edit-occ-select{
+    font-size:.7rem; border:1px solid transparent; background:transparent; color:var(--card-sub);
+    font-family:'Cairo'; padding:2px 4px; border-radius:4px;
+  }
+  .edit-occ-input:hover, .edit-occ-input:focus, .edit-occ-select:hover, .edit-occ-select:focus{
+    border-color:var(--input-border); background:var(--input-bg);
+  }
   .amount-field{ display:flex; align-items:center; gap:8px; margin-inline-start:auto; }
   .amount-field label{ font-size:.82rem; color:var(--card-sub); }
   .amount-field input{
@@ -286,6 +307,19 @@
     border-radius:50%; background:var(--copper); color:#241505; font-size:.7rem; font-weight:800; margin-inline-end:6px;
   }
 
+  /* Rotation picker */
+  .rot-chip{
+    display:flex; align-items:center; gap:5px; padding:6px 10px; border-radius:999px;
+    border:1px solid var(--input-border); background:var(--input-bg); cursor:pointer; font-size:.82rem;
+    color:var(--card-text); user-select:none;
+  }
+  .rot-chip.selected{ background:var(--copper); color:#241505; border-color:var(--copper); }
+  .rot-entry{
+    display:flex; align-items:center; gap:10px; padding:9px 4px; border-bottom:1px dashed var(--card-border);
+    flex-wrap:wrap;
+  }
+  .rot-entry .del{ background:none; border:none; color:var(--bad); cursor:pointer; font-size:1rem; margin-inline-start:auto; }
+
   /* Archive table */
   .archive-table{ width:100%; border-collapse:collapse; font-size:.85rem; }
   .archive-table th, .archive-table td{ padding:8px 6px; text-align:center; border-bottom:1px dashed var(--card-border); }
@@ -328,6 +362,7 @@
     <button class="tab-btn" data-tab="members">الأعضاء</button>
     <button class="tab-btn" data-tab="occasions">المناسبات</button>
     <button class="tab-btn" data-tab="archive">الأرشيف</button>
+    <button class="tab-btn" data-tab="rotation">دور عشاء الاثنين</button>
   </div>
 
   <!-- Dashboard Tab -->
@@ -348,6 +383,11 @@
           <div class="dash-big" id="dashUnpaidCount" style="color:var(--bad)">0</div>
         </div>
       </div>
+    </div>
+
+    <div class="card" id="mondayCard">
+      <h2>🍽️ عشاء الاثنين — <span id="mondayDateLabel">—</span></h2>
+      <div id="mondayTurnList"></div>
     </div>
 
     <div class="card-grid">
@@ -386,6 +426,7 @@
         <button id="prevMonth">‹</button>
         <div class="month-label" id="monthLabel">—</div>
         <button id="nextMonth">›</button>
+        <input type="month" id="monthPicker" class="month-picker-input">
         <div class="amount-field">
           <label>مبلغ القطة للفرد (ر.س)</label>
           <input type="number" id="amountInput" min="0" step="5">
@@ -459,6 +500,23 @@
     </div>
   </div>
 
+  <!-- Rotation Tab -->
+  <div class="panel" id="panel-rotation">
+    <div class="card">
+      <h2>إضافة / تعديل دور أسبوعي</h2>
+      <p class="dash-label" style="margin-bottom:10px;">اختر تاريخ يوم الاثنين وحدد الأعضاء الذين عليهم الدور في العشاء.</p>
+      <div class="add-member-form">
+        <input type="date" id="rotationDate">
+        <button class="btn" id="saveRotationBtn">حفظ الدور</button>
+      </div>
+      <div id="rotationMemberPicker" style="margin-top:10px; display:flex; flex-wrap:wrap; gap:8px;"></div>
+    </div>
+    <div class="card">
+      <h2>كل الأدوار المجدولة</h2>
+      <div id="rotationList"></div>
+    </div>
+  </div>
+
   <footer>هذا الدفتر مشترك بين جميع من يفتح هذا التطبيق — أي تعديل يظهر للجميع.</footer>
 </div>
 
@@ -501,16 +559,19 @@ const db = getFirestore(fbApp);
 const membersCol = collection(db, 'members');
 const monthsCol = collection(db, 'months');
 const pinDocRef = doc(db, 'config', 'pin');
+const rotationCol = collection(db, 'rotation');
 
 let members = [];
 let monthsData = {};
+let rotationData = {};
+let selectedRotationMemberIds = new Set();
 let currentMonth = new Date().toISOString().slice(0,7);
 const DEFAULT_AMOUNT = 100;
 
 let accessPin = null;
 let session = null;
 let pendingAction = null;
-const ready = { members:false, months:false, pin:false };
+const ready = { members:false, months:false, pin:false, rotation:false };
 const AVATAR_COLORS = ['#c08a44','#4f7d5a','#8c3a2b','#4a86a8','#7d5a9e','#a86b4a','#3f8f7a','#a84a6b'];
 
 function uid(){ return 'm_' + Math.random().toString(36).slice(2,9); }
@@ -549,7 +610,7 @@ function clearSessionLocalStorage(){
 }
 
 function maybeRender(){
-  if(ready.members && ready.months && ready.pin){
+  if(ready.members && ready.months && ready.pin && ready.rotation){
     render();
     renderSessionBar();
   }
@@ -574,6 +635,13 @@ onSnapshot(pinDocRef, snap=>{
   ready.pin = true;
   maybeRender();
 }, err=>console.error('pin listener error', err));
+
+onSnapshot(rotationCol, snap=>{
+  rotationData = {};
+  snap.forEach(d=>{ rotationData[d.id] = d.data(); });
+  ready.rotation = true;
+  maybeRender();
+}, err=>console.error('rotation listener error', err));
 
 async function savePin(pin){ await setDoc(pinDocRef, { value: pin }); }
 
@@ -628,6 +696,20 @@ function daysUntilNextOccurrence(mmdd){
   return Math.round((target - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
 }
 
+function pad2(n){ return String(n).padStart(2,'0'); }
+function dateToKey(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+function getThisMondayDate(){
+  const t = new Date();
+  const now = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+  const dow = now.getDay(); // 0=Sun..6=Sat
+  const diff = (dow === 1) ? 0 : ((8 - dow) % 7);
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate()+diff);
+}
+function formatArabicDate(d){
+  const dayNames = ['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  return dayNames[d.getDay()] + ' ' + d.getDate() + ' ' + monthNames[d.getMonth()];
+}
+
 /* ---------- Render root ---------- */
 function render(){
   document.getElementById('memberCountSub').textContent =
@@ -637,11 +719,23 @@ function render(){
   renderMembers();
   renderOccasions();
   renderArchive();
+  renderRotationTab();
 }
 
 /* ---------- Monthly ---------- */
+function lateDaysFor(monthKey){
+  const todayStr = new Date().toISOString().slice(0,7);
+  if(monthKey > todayStr) return null;
+  const [y,m] = monthKey.split('-').map(Number);
+  const firstOfMonth = new Date(y, m-1, 1);
+  const now = new Date();
+  const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.max(0, Math.floor((today0 - firstOfMonth)/86400000));
+}
+
 function renderMonthly(){
   document.getElementById('monthLabel').textContent = formatMonthLabel(currentMonth);
+  document.getElementById('monthPicker').value = currentMonth;
   const md = ensureMonth(currentMonth);
   document.getElementById('amountInput').value = md.amount;
 
@@ -649,6 +743,12 @@ function renderMonthly(){
   const query = (document.getElementById('monthlySearch').value || '').trim();
   list.innerHTML = '';
   const filtered = members.filter(m=> !query || m.name.includes(query));
+  // Dynamic order: paid members rise to the top, unpaid sink to the bottom
+  const sortedFiltered = [...filtered].sort((a,b)=>{
+    const pa = md.payments[a.id] ? 1 : 0;
+    const pb = md.payments[b.id] ? 1 : 0;
+    return pb - pa;
+  });
   if(members.length === 0){
     list.innerHTML = '<div class="empty">أضف أعضاء من تبويب "الأعضاء" أولاً</div>';
   }else if(filtered.length === 0){
@@ -656,8 +756,9 @@ function renderMonthly(){
   }
   let paidCount = 0;
   members.forEach(mem=>{ if(md.payments[mem.id]) paidCount++; });
+  const late = lateDaysFor(currentMonth);
 
-  filtered.forEach(mem=>{
+  sortedFiltered.forEach(mem=>{
     const paid = !!md.payments[mem.id];
     const row = document.createElement('div');
     row.className = 'member-row';
@@ -666,10 +767,14 @@ function renderMonthly(){
       const d = daysUntilNextOccurrence(mem.occDate);
       if(d <= 14) occBadge = `<span class="occ-badge">🎉 بعد ${d} يوم</span>`;
     }
+    let lateBadge = '';
+    if(!paid && late !== null && late > 0){
+      lateBadge = `<span class="late-badge">⏱️ متأخر ${late} يوم</span>`;
+    }
     row.innerHTML = `
       ${avatarHtml(mem.name)}
       <div class="m-main">
-        <div class="m-name">${escapeHtml(mem.name)}${occBadge}</div>
+        <div class="m-name">${escapeHtml(mem.name)}${occBadge}${lateBadge}</div>
         ${mem.note ? `<div class="m-note">${escapeHtml(mem.note)}</div>` : ''}
       </div>
       <button class="pay-toggle ${paid?'paid':'unpaid'}" data-id="${mem.id}">
@@ -727,13 +832,49 @@ function renderMembers(){
       </div>
       ${avatarHtml(mem.name)}
       <div class="m-main">
-        <div class="m-name">${escapeHtml(mem.name)}</div>
-        <div class="m-note">${mem.occDate ? (mem.occLabel+' — '+mem.occDate) : 'بدون مناسبة'}</div>
+        <input class="edit-name-input" data-id="${mem.id}" data-field="name" value="${escapeHtml(mem.name)}">
+        <div class="edit-occ-row">
+          <input class="edit-occ-input" data-id="${mem.id}" data-field="occDate" placeholder="شهر-يوم" value="${escapeHtml(mem.occDate||'')}" style="width:64px;">
+          <select class="edit-occ-select" data-id="${mem.id}" data-field="occLabel">
+            <option value="ميلاد" ${mem.occLabel==='ميلاد'?'selected':''}>ميلاد</option>
+            <option value="زواج" ${mem.occLabel==='زواج'?'selected':''}>زواج</option>
+            <option value="تخرج" ${mem.occLabel==='تخرج'?'selected':''}>تخرج</option>
+            <option value="أخرى" ${mem.occLabel==='أخرى'?'selected':''}>أخرى</option>
+          </select>
+        </div>
       </div>
       <input class="note-input" data-id="${mem.id}" placeholder="ملاحظة" value="${escapeHtml(mem.note||'')}">
       <button class="del" data-id="${mem.id}" title="حذف العضو">🗑️</button>
     `;
     list.appendChild(row);
+  });
+  list.querySelectorAll('.edit-name-input').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      requireAuth(async ()=>{
+        const newName = inp.value.trim();
+        if(!newName){ alert('الاسم لا يمكن أن يكون فارغًا.'); return; }
+        try{ await setDoc(doc(membersCol, inp.dataset.id), { name: newName }, { merge:true }); }
+        catch(e){ console.error('save name failed', e); alert('تعذّر حفظ الاسم.'); }
+      });
+    });
+  });
+  list.querySelectorAll('.edit-occ-input').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      requireAuth(async ()=>{
+        const val = inp.value.trim();
+        if(val && !/^\d{2}-\d{2}$/.test(val)){ alert('صيغة التاريخ يجب أن تكون شهر-يوم مثل 09-15'); return; }
+        try{ await setDoc(doc(membersCol, inp.dataset.id), { occDate: val }, { merge:true }); }
+        catch(e){ console.error('save occDate failed', e); alert('تعذّر حفظ تاريخ المناسبة.'); }
+      });
+    });
+  });
+  list.querySelectorAll('.edit-occ-select').forEach(sel=>{
+    sel.addEventListener('change', ()=>{
+      requireAuth(async ()=>{
+        try{ await setDoc(doc(membersCol, sel.dataset.id), { occLabel: sel.value }, { merge:true }); }
+        catch(e){ console.error('save occLabel failed', e); alert('تعذّر حفظ نوع المناسبة.'); }
+      });
+    });
   });
   list.querySelectorAll('.del').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -832,7 +973,25 @@ function svgBar(labels, values){
   });
   return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${bars}</svg>`;
 }
+function renderMondayCard(){
+  const monday = getThisMondayDate();
+  const key = dateToKey(monday);
+  document.getElementById('mondayDateLabel').textContent = formatArabicDate(monday);
+  const entry = rotationData[key];
+  const holder = document.getElementById('mondayTurnList');
+  if(!entry || !entry.memberIds || entry.memberIds.length === 0){
+    holder.innerHTML = '<div class="empty">لم يُحدد أعضاء لهذا الأسبوع بعد — أضفهم من تبويب "دور عشاء الاثنين"</div>';
+    return;
+  }
+  const names = entry.memberIds.map(id=>{
+    const m = members.find(mm=>mm.id===id);
+    return m ? m.name : null;
+  }).filter(Boolean);
+  holder.innerHTML = names.map(n=>`<span class="rot-chip selected" style="cursor:default;">${escapeHtml(n)}</span>`).join(' ');
+}
+
 function renderDashboard(){
+  renderMondayCard();
   const md = ensureMonth(currentMonth);
   let paidCount = 0;
   members.forEach(m=>{ if(md.payments[m.id]) paidCount++; });
@@ -881,7 +1040,7 @@ function renderDashboard(){
 
   // Upcoming occasions preview (next 2)
   const withOcc = members.filter(m=>m.occDate && /^\d{2}-\d{2}$/.test(m.occDate))
-    .map(m=>({...m, days: daysUntilNextOccurrence(m.occDate)})).sort((a,b)=>a.days-b.days).slice(0,3);
+    .map(m=>({...m, days: daysUntilNextOccurrence(m.occDate)})).sort((a,b)=>a.days-b.days).slice(0,5);
   const dashOcc = document.getElementById('dashOcc');
   dashOcc.innerHTML = withOcc.length ? '' : '<div class="empty">لا توجد مناسبات قريبة</div>';
   withOcc.forEach(m=>{
@@ -912,6 +1071,64 @@ function renderArchive(){
     body.appendChild(tr);
   });
 }
+
+/* ---------- Rotation (Monday dinner turn) ---------- */
+function renderRotationTab(){
+  const picker = document.getElementById('rotationMemberPicker');
+  picker.innerHTML = '';
+  members.forEach(m=>{
+    const chip = document.createElement('div');
+    chip.className = 'rot-chip' + (selectedRotationMemberIds.has(m.id) ? ' selected' : '');
+    chip.textContent = m.name;
+    chip.dataset.id = m.id;
+    chip.addEventListener('click', ()=>{
+      if(selectedRotationMemberIds.has(m.id)) selectedRotationMemberIds.delete(m.id);
+      else selectedRotationMemberIds.add(m.id);
+      renderRotationTab();
+    });
+    picker.appendChild(chip);
+  });
+
+  const list = document.getElementById('rotationList');
+  const keys = Object.keys(rotationData).sort();
+  list.innerHTML = keys.length ? '' : '<div class="empty">لا يوجد جدول بعد</div>';
+  keys.forEach(k=>{
+    const entry = rotationData[k];
+    const names = (entry.memberIds||[]).map(id=>{
+      const m = members.find(mm=>mm.id===id);
+      return m ? m.name : null;
+    }).filter(Boolean);
+    const d = new Date(k+'T00:00:00');
+    const row = document.createElement('div');
+    row.className = 'rot-entry';
+    row.innerHTML = `<b>${escapeHtml(formatArabicDate(d))}</b>
+      <span>${names.map(n=>escapeHtml(n)).join('، ') || '—'}</span>
+      <button class="del" data-key="${k}">🗑️</button>`;
+    list.appendChild(row);
+  });
+  list.querySelectorAll('.del').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      requireAuth(async ()=>{
+        if(!confirm('حذف هذا الدور؟')) return;
+        try{ await deleteDoc(doc(rotationCol, btn.dataset.key)); }
+        catch(e){ console.error('delete rotation failed', e); alert('تعذّر الحذف.'); }
+      });
+    });
+  });
+}
+document.getElementById('saveRotationBtn').addEventListener('click', ()=>{
+  requireAuth(async ()=>{
+    const dateEl = document.getElementById('rotationDate');
+    if(!dateEl.value){ alert('اختر تاريخ يوم الاثنين أولاً'); return; }
+    if(selectedRotationMemberIds.size === 0){ alert('اختر عضو واحد على الأقل'); return; }
+    try{
+      await setDoc(doc(rotationCol, dateEl.value), { memberIds: Array.from(selectedRotationMemberIds) });
+      selectedRotationMemberIds = new Set();
+      dateEl.value = '';
+      alert('تم حفظ الدور.');
+    }catch(e){ console.error('save rotation failed', e); alert('تعذّر الحفظ.'); }
+  });
+});
 
 /* ---------- Export (SheetJS) ---------- */
 function exportMonth(){
@@ -1032,6 +1249,9 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 /* ---------- Month nav ---------- */
 document.getElementById('prevMonth').addEventListener('click', ()=>{ currentMonth = shiftMonth(currentMonth, -1); renderMonthly(); renderDashboard(); });
 document.getElementById('nextMonth').addEventListener('click', ()=>{ currentMonth = shiftMonth(currentMonth, 1); renderMonthly(); renderDashboard(); });
+document.getElementById('monthPicker').addEventListener('change', (e)=>{
+  if(e.target.value){ currentMonth = e.target.value; renderMonthly(); renderDashboard(); }
+});
 document.getElementById('amountInput').addEventListener('change', (e)=>{
   const newVal = Number(e.target.value) || 0;
   requireAuth(async ()=>{
