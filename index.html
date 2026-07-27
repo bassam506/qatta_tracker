@@ -571,7 +571,18 @@ let members = [];
 let monthsData = {};
 let rotationData = {};
 let selectedRotationMemberIds = new Set();
-let currentMonth = new Date().toISOString().slice(0,7);
+// القطة تبدأ تُجمع قبل الشهر المستهدف بأسبوع إلى أسبوع ونصف تقريبًا،
+// فإذا كنا في العشرين وما بعده من الشهر، الافتراضي يكون الشهر الجاي (لأن القطة الجارية فعليًا له).
+function getDefaultCollectionMonth(){
+  const now = new Date();
+  let y = now.getFullYear(), m = now.getMonth(); // m is 0-indexed
+  if(now.getDate() >= 20){
+    m += 1;
+    if(m > 11){ m = 0; y += 1; }
+  }
+  return y + '-' + String(m+1).padStart(2,'0');
+}
+let currentMonth = getDefaultCollectionMonth();
 const DEFAULT_AMOUNT = 100;
 
 let accessPin = null;
