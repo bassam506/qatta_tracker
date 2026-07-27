@@ -518,6 +518,14 @@
       <div id="rotationMemberPicker" style="margin-top:10px; display:flex; flex-wrap:wrap; gap:8px;"></div>
     </div>
     <div class="card">
+      <h2>🍽️ مشاركة دعوة عشاء هذا الاثنين</h2>
+      <p class="dash-label" id="inviteMondayLabel" style="margin-bottom:10px;">—</p>
+      <div class="add-member-form">
+        <input type="text" id="inviteCustomMessage" name="note" placeholder="رسالة اختيارية تُضاف للدعوة (مثال: العشاء عند بيت سعود الساعة ٨)" style="flex:1; min-width:220px;">
+        <button class="btn" id="shareInviteBtn">📸 مشاركة بطاقة الدعوة</button>
+      </div>
+    </div>
+    <div class="card">
       <h2>كل الأدوار المجدولة</h2>
       <div id="rotationList"></div>
     </div>
@@ -1098,6 +1106,20 @@ function renderArchive(){
 
 /* ---------- Rotation (Monday dinner turn) ---------- */
 function renderRotationTab(){
+  const monday = getThisMondayDate();
+  const mondayKey = dateToKey(monday);
+  const mondayEntry = rotationData[mondayKey];
+  const inviteLabelEl = document.getElementById('inviteMondayLabel');
+  if(mondayEntry && mondayEntry.memberIds && mondayEntry.memberIds.length){
+    const names = mondayEntry.memberIds.map(id=>{
+      const m = members.find(mm=>mm.id===id);
+      return m ? m.name : null;
+    }).filter(Boolean);
+    inviteLabelEl.textContent = `${formatArabicDate(monday)} — ${names.join('، ')}`;
+  }else{
+    inviteLabelEl.textContent = `${formatArabicDate(monday)} — لم تحدد الأعضاء بعد، أضفهم أولاً بالأعلى.`;
+  }
+
   const picker = document.getElementById('rotationMemberPicker');
   picker.innerHTML = '';
   members.forEach(m=>{
@@ -1324,6 +1346,193 @@ async function shareTodayImage(){
   }
 }
 document.getElementById('shareImageBtn').addEventListener('click', shareTodayImage);
+
+/* ---------- Monday dinner invitation card ---------- */
+function wrapText(ctx, text, maxWidth){
+  const words = text.split(' ');
+  const lines = [];
+  let line = '';
+  words.forEach(word=>{
+    const test = line ? line + ' ' + word : word;
+    if(ctx.measureText(test).width > maxWidth && line){
+      lines.push(line);
+      line = word;
+    }else{
+      line = test;
+    }
+  });
+  if(line) lines.push(line);
+  return lines;
+}
+async function buildInviteCanvas(names, customMessage, mondayDate){
+  if(document.fonts && document.fonts.ready) await document.fonts.ready;
+
+  const W = 1080;
+  const marginX = 80;
+  let H = 1000;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  let ctx = canvas.getContext('2d');
+  ctx.direction = 'rtl';
+  ctx.textAlign = 'center';
+  ctx.font = "500 30px 'Cairo', sans-serif";
+  const msgLines = customMessage ? wrapText(ctx, customMessage, W - marginX*2 - 60) : [];
+
+  const nameChipRows = Math.ceil(names.length / 2);
+  H = 560 + nameChipRows*74 + (msgLines.length ? (msgLines.length*44 + 120) : 40) + 160;
+  canvas.width = W; canvas.height = H;
+  ctx = canvas.getContext('2d');
+  ctx.direction = 'rtl';
+
+  // Warm festive gradient background
+  const bg = ctx.createLinearGradient(0,0,W,H);
+  bg.addColorStop(0, '#2a1b10');
+  bg.addColorStop(0.5, '#4a2e17');
+  bg.addColorStop(1, '#2a1b10');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,W,H);
+
+  // Radial gold glows top & bottom
+  const glow1 = ctx.createRadialGradient(W/2, 0, 10, W/2, 0, 500);
+  glow1.addColorStop(0, 'rgba(224,167,92,0.35)');
+  glow1.addColorStop(1, 'rgba(224,167,92,0)');
+  ctx.fillStyle = glow1;
+  ctx.fillRect(0,0,W,H);
+  const glow2 = ctx.createRadialGradient(W/2, H, 10, W/2, H, 500);
+  glow2.addColorStop(0, 'rgba(224,167,92,0.22)');
+  glow2.addColorStop(1, 'rgba(224,167,92,0)');
+  ctx.fillStyle = glow2;
+  ctx.fillRect(0,0,W,H);
+
+  // Decorative double frame
+  ctx.strokeStyle = 'rgba(224,167,92,0.55)';
+  ctx.lineWidth = 3;
+  roundRect(ctx, 30, 30, W-60, H-60, 26);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(224,167,92,0.28)';
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, 44, 44, W-88, H-88, 20);
+  ctx.stroke();
+
+  // Header
+  ctx.textAlign = 'center';
+  ctx.font = "40px sans-serif";
+  ctx.fillText('🌙 🍽️ 🌙', W/2, 140);
+
+  ctx.font = "700 66px 'Markazi Text', 'Cairo', serif";
+  ctx.fillStyle = '#f3d9a8';
+  ctx.fillText('دعوة عشاء الاثنين', W/2, 230);
+
+  ctx.font = "600 32px 'Cairo', sans-serif";
+  ctx.fillStyle = '#e0c9a0';
+  ctx.fillText(formatArabicDate(mondayDate), W/2, 280);
+
+  ctx.strokeStyle = 'rgba(224,167,92,0.4)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(marginX, 320); ctx.lineTo(W-marginX, 320); ctx.stroke();
+
+  ctx.font = "500 30px 'Cairo', sans-serif";
+  ctx.fillStyle = '#dcc9ab';
+  ctx.fillText('الدور هذا الأسبوع على:', W/2, 380);
+
+  // Name chips, two per row
+  const chipW = (W - marginX*2 - 24)/2;
+  const chipH = 60;
+  let y = 420;
+  ctx.font = "700 30px 'Cairo', sans-serif";
+  for(let i=0; i<names.length; i+=2){
+    const rowNames = names.slice(i, i+2);
+    rowNames.forEach((name, idx)=>{
+      const x = idx === 0 ? (W/2 + 12) : (W/2 - 12 - chipW);
+      ctx.fillStyle = 'rgba(224,167,92,0.15)';
+      roundRect(ctx, x, y, chipW, chipH, 14);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(224,167,92,0.6)';
+      ctx.lineWidth = 1.5;
+      roundRect(ctx, x, y, chipW, chipH, 14);
+      ctx.stroke();
+      ctx.fillStyle = '#fbe9c9';
+      ctx.textAlign = 'center';
+      ctx.fillText(name, x + chipW/2, y + chipH/2 + 10);
+    });
+    y += 74;
+  }
+
+  // Optional custom message
+  if(msgLines.length){
+    const boxTop = y + 30;
+    const boxH = msgLines.length*44 + 50;
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    roundRect(ctx, marginX, boxTop, W-marginX*2, boxH, 16);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(224,167,92,0.35)';
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, marginX, boxTop, W-marginX*2, boxH, 16);
+    ctx.stroke();
+    ctx.font = "500 30px 'Cairo', sans-serif";
+    ctx.fillStyle = '#f3ecd8';
+    msgLines.forEach((line, i)=>{
+      ctx.fillText(line, W/2, boxTop + 44 + i*44);
+    });
+    y = boxTop + boxH;
+  }
+
+  // Footer
+  ctx.font = "600 28px 'Cairo', sans-serif";
+  ctx.fillStyle = '#e0c9a0';
+  ctx.fillText('بانتظار حضوركم 🌙', W/2, y + 60);
+  ctx.font = "400 22px 'Cairo', sans-serif";
+  ctx.fillStyle = 'rgba(224,201,160,0.6)';
+  ctx.fillText('استراحة الدرعية', W/2, H - 45);
+
+  return canvas;
+}
+async function shareInvite(){
+  const monday = getThisMondayDate();
+  const mondayKey = dateToKey(monday);
+  const entry = rotationData[mondayKey];
+  if(!entry || !entry.memberIds || entry.memberIds.length === 0){
+    alert('ما فيه أعضاء محددين لهذا الاثنين بعد. أضفهم أولاً من الأعلى.');
+    return;
+  }
+  const names = entry.memberIds.map(id=>{
+    const m = members.find(mm=>mm.id===id);
+    return m ? m.name : null;
+  }).filter(Boolean);
+  const customMessage = document.getElementById('inviteCustomMessage').value.trim();
+
+  const btn = document.getElementById('shareInviteBtn');
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ جاري التجهيز...';
+  btn.disabled = true;
+  try{
+    const canvas = await buildInviteCanvas(names, customMessage, monday);
+    canvas.toBlob(async (blob)=>{
+      btn.textContent = originalText;
+      btn.disabled = false;
+      if(!blob){ alert('تعذّر إنشاء البطاقة.'); return; }
+      const fileName = `دعوة_عشاء_${mondayKey}.png`;
+      const file = new File([blob], fileName, { type:'image/png' });
+      if(navigator.canShare && navigator.canShare({ files:[file] })){
+        try{
+          await navigator.share({ files:[file], title:'دعوة عشاء الاثنين', text: customMessage || 'دعوة عشاء الاثنين في استراحة الدرعية' });
+        }catch(e){ /* user cancelled, ignore */ }
+      }else{
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = fileName; a.click();
+        URL.revokeObjectURL(url);
+        alert('متصفحك لا يدعم المشاركة المباشرة، تم تنزيل البطاقة بدلاً من ذلك — شاركها يدويًا عبر واتساب.');
+      }
+    }, 'image/png');
+  }catch(e){
+    console.error('build invite image failed', e);
+    btn.textContent = originalText;
+    btn.disabled = false;
+    alert('تعذّر إنشاء البطاقة.');
+  }
+}
+document.getElementById('shareInviteBtn').addEventListener('click', shareInvite);
 
 /* ---------- Export (SheetJS) ---------- */
 function exportMonth(){
