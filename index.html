@@ -168,6 +168,19 @@
   .expense-row .exp-name{ font-weight:700; flex:1; }
   .expense-row .exp-date{ font-size:.72rem; color:var(--card-sub); }
   .expense-row .exp-amount{ font-weight:800; color:var(--bad); white-space:nowrap; }
+  .exp-thumb{
+    width:44px; height:44px; border-radius:8px; object-fit:cover; border:1px solid var(--card-border);
+    cursor:pointer; flex-shrink:0;
+  }
+  .exp-uploading{ font-size:.7rem; color:var(--card-sub); }
+  .activity-row{
+    display:flex; align-items:baseline; gap:10px; padding:9px 4px; border-bottom:1px dashed var(--card-border);
+    font-size:.85rem; flex-wrap:wrap;
+  }
+  .activity-row .act-time{ font-size:.7rem; color:var(--card-sub); white-space:nowrap; order:3; width:100%; }
+  .activity-row .act-who{ font-weight:800; color:var(--stamp-red); }
+  .activity-row .act-action{ font-weight:700; }
+  .activity-row .act-details{ color:var(--card-sub); }
   .order-num-input{
     width:44px; padding:4px 2px; border-radius:6px; border:1px solid var(--input-border);
     font-family:'Cairo'; font-size:.8rem; background:var(--input-bg); color:var(--card-text); text-align:center;
@@ -400,6 +413,7 @@
     <button class="tab-btn" data-tab="archive">الأرشيف</button>
     <button class="tab-btn" data-tab="rotation">دور عشاء الاثنين</button>
     <button class="tab-btn" data-tab="expenses">المصروفات</button>
+    <button class="tab-btn" data-tab="activity">سجل التعديلات</button>
   </div>
 
   <!-- Dashboard Tab -->
@@ -583,12 +597,29 @@
         <input type="text" id="newExpenseName" placeholder="اسم المصروف (مثال: صيانة المكيف)" style="flex:1; min-width:180px;">
         <input type="number" id="newExpenseAmount" placeholder="المبلغ (ر.س)" min="0" step="1" style="width:140px;">
         <input type="date" id="newExpenseDate">
+        <label class="btn secondary" id="expenseImageLabel" style="cursor:pointer;">
+          📎 إرفاق صورة الفاتورة
+          <input type="file" id="newExpenseImage" accept="image/*" capture="environment" style="display:none;">
+        </label>
         <button class="btn" id="addExpenseBtn">إضافة المصروف</button>
+      </div>
+      <div id="expenseImagePreviewWrap" style="margin-top:10px; display:none;">
+        <img id="expenseImagePreview" style="max-width:120px; max-height:120px; border-radius:8px; border:1px solid var(--card-border);">
+        <button class="link-btn" id="removeExpenseImageBtn" type="button">إزالة الصورة</button>
       </div>
     </div>
     <div class="card">
       <h2>سجل المصروفات</h2>
       <div id="expenseList"></div>
+    </div>
+  </div>
+
+  <!-- Activity Log Tab -->
+  <div class="panel" id="panel-activity">
+    <div class="card">
+      <h2>سجل التعديلات</h2>
+      <p class="dash-label" style="margin-bottom:10px;">آخر ١٥٠ عملية تعديل على البيانات، مع اسم من قام بها والوقت.</p>
+      <div id="activityList"></div>
     </div>
   </div>
 
@@ -614,11 +645,29 @@
   </div>
 </div>
 
+<!-- Custom alert/confirm modal (replaces native alert/confirm) -->
+<div class="modal-overlay hidden" id="customAlertModal">
+  <div class="modal-box">
+    <h3 id="customAlertTitle">تنبيه</h3>
+    <p class="hint" id="customAlertMessage" style="color:var(--card-text); font-size:.92rem;"></p>
+    <div class="modal-actions">
+      <button class="btn secondary" id="customAlertCancelBtn" style="display:none">إلغاء</button>
+      <button class="btn" id="customAlertOkBtn">حسنًا</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot
+  getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, limit, addDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+import {
+  initializeAppCheck, ReCaptchaV3Provider
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAyfgd_-11FdDVfBw-WZmtqJ3cq2lI4qlU",
@@ -630,17 +679,25 @@ const firebaseConfig = {
   measurementId: "G-QDXH0F25TK"
 };
 const fbApp = initializeApp(firebaseConfig);
+initializeAppCheck(fbApp, {
+  provider: new ReCaptchaV3Provider('6Lcx52wtAAAAAOqSr87CPYsBfxRbYOpxzCVtr3GY'),
+  isTokenAutoRefreshEnabled: true
+});
 const db = getFirestore(fbApp);
+const storage = getStorage(fbApp);
 const membersCol = collection(db, 'members');
 const monthsCol = collection(db, 'months');
 const pinDocRef = doc(db, 'config', 'pin');
 const rotationCol = collection(db, 'rotation');
 const expensesCol = collection(db, 'expenses');
+const activityCol = collection(db, 'activityLog');
+const activityQuery = query(activityCol, orderBy('at','desc'), limit(150));
 
 let members = [];
 let monthsData = {};
 let rotationData = {};
 let expensesData = [];
+let activityData = [];
 let selectedRotationMemberIds = new Set();
 // القطة تبدأ تُجمع قبل الشهر المستهدف بأسبوع إلى أسبوع ونصف تقريبًا،
 // فإذا كنا في العشرين وما بعده من الشهر، الافتراضي يكون الشهر الجاي (لأن القطة الجارية فعليًا له).
@@ -659,7 +716,7 @@ const DEFAULT_AMOUNT = 100;
 let accessPin = null;
 let session = null;
 let pendingAction = null;
-const ready = { members:false, months:false, pin:false, rotation:false, expenses:false };
+const ready = { members:false, months:false, pin:false, rotation:false, expenses:false, activity:false };
 const AVATAR_COLORS = ['#c08a44','#4f7d5a','#8c3a2b','#4a86a8','#7d5a9e','#a86b4a','#3f8f7a','#a84a6b'];
 
 function uid(){ return 'm_' + Math.random().toString(36).slice(2,9); }
@@ -698,7 +755,7 @@ function clearSessionLocalStorage(){
 }
 
 function maybeRender(){
-  if(ready.members && ready.months && ready.pin && ready.rotation && ready.expenses){
+  if(ready.members && ready.months && ready.pin && ready.rotation && ready.expenses && ready.activity){
     render();
     renderSessionBar();
   }
@@ -738,7 +795,23 @@ onSnapshot(expensesCol, snap=>{
   maybeRender();
 }, err=>console.error('expenses listener error', err));
 
+onSnapshot(activityQuery, snap=>{
+  activityData = snap.docs.map(d=>({ id: d.id, ...d.data() }));
+  ready.activity = true;
+  maybeRender();
+}, err=>console.error('activity listener error', err));
+
 async function savePin(pin){ await setDoc(pinDocRef, { value: pin }); }
+
+async function logActivity(action, details){
+  try{
+    await addDoc(activityCol, {
+      action, details: details || '',
+      who: (session && session.name) ? session.name : 'غير معروف',
+      at: new Date().toISOString()
+    });
+  }catch(e){ console.error('log activity failed', e); }
+}
 
 function ensureMonth(key){
   if(!monthsData[key]){ monthsData[key] = { amount: DEFAULT_AMOUNT, payments:{}, exempt:{} }; }
@@ -780,6 +853,44 @@ function escapeHtml(str){
   const d = document.createElement('div');
   d.textContent = str;
   return d.innerHTML;
+}
+
+/* ---------- Custom alert/confirm (styled, matches app theme) ---------- */
+function showAlert(message, title){
+  return new Promise(resolve=>{
+    const modal = document.getElementById('customAlertModal');
+    document.getElementById('customAlertTitle').textContent = title || 'تنبيه';
+    document.getElementById('customAlertMessage').textContent = message;
+    const cancelBtn = document.getElementById('customAlertCancelBtn');
+    const okBtn = document.getElementById('customAlertOkBtn');
+    cancelBtn.style.display = 'none';
+    okBtn.textContent = 'حسنًا';
+    modal.classList.remove('hidden');
+    const cleanup = ()=>{ modal.classList.add('hidden'); okBtn.removeEventListener('click', onOk); };
+    const onOk = ()=>{ cleanup(); resolve(true); };
+    okBtn.addEventListener('click', onOk);
+  });
+}
+function showConfirm(message, title){
+  return new Promise(resolve=>{
+    const modal = document.getElementById('customAlertModal');
+    document.getElementById('customAlertTitle').textContent = title || 'تأكيد';
+    document.getElementById('customAlertMessage').textContent = message;
+    const cancelBtn = document.getElementById('customAlertCancelBtn');
+    const okBtn = document.getElementById('customAlertOkBtn');
+    cancelBtn.style.display = 'inline-block';
+    okBtn.textContent = 'تأكيد';
+    modal.classList.remove('hidden');
+    const cleanup = ()=>{
+      modal.classList.add('hidden');
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+    };
+    const onOk = ()=>{ cleanup(); resolve(true); };
+    const onCancel = ()=>{ cleanup(); resolve(false); };
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+  });
 }
 function initials(name){
   const parts = name.trim().split(/\s+/);
@@ -828,6 +939,7 @@ function render(){
   renderArchive();
   renderRotationTab();
   renderExpenses();
+  renderActivityLog();
 }
 
 /* ---------- Monthly ---------- */
@@ -925,13 +1037,15 @@ function renderMonthly(){
       requireAuth(async ()=>{
         const id = btn.dataset.id;
         const newVal = !md.payments[id];
+        const mem = members.find(m=>m.id===id);
         btn.classList.add('pop');
         try{
           await setDoc(doc(monthsCol, currentMonth), {
             amount: md.amount,
             payments: { ...md.payments, [id]: newVal }
           }, { merge:true });
-        }catch(e){ console.error('save payment failed', e); alert('تعذّر حفظ التغيير، تأكد من اتصالك بالإنترنت.'); }
+          logActivity(newVal ? 'تسجيل دفع' : 'إلغاء تسجيل دفع', `${mem?mem.name:''} — ${formatMonthLabel(currentMonth)}`);
+        }catch(e){ console.error('save payment failed', e); showAlert('تعذّر حفظ التغيير، تأكد من اتصالك بالإنترنت.'); }
       });
     });
   });
@@ -939,12 +1053,14 @@ function renderMonthly(){
     btn.addEventListener('click', ()=>{
       requireAuth(async ()=>{
         const id = btn.dataset.id;
-        if(!confirm('إعفاء هذا العضو من قطة هذا الشهر فقط؟ (يمكن إرجاعه لاحقًا)')) return;
+        const mem = members.find(m=>m.id===id);
+        if(!(await showConfirm('إعفاء هذا العضو من قطة هذا الشهر فقط؟ (يمكن إرجاعه لاحقًا)'))) return;
         try{
           await setDoc(doc(monthsCol, currentMonth), {
             exempt: { ...md.exempt, [id]: true }
           }, { merge:true });
-        }catch(e){ console.error('save exempt failed', e); alert('تعذّر الحفظ.'); }
+          logActivity('إعفاء عضو من الشهر', `${mem?mem.name:''} — ${formatMonthLabel(currentMonth)}`);
+        }catch(e){ console.error('save exempt failed', e); showAlert('تعذّر الحفظ.'); }
       });
     });
   });
@@ -952,16 +1068,19 @@ function renderMonthly(){
     btn.addEventListener('click', ()=>{
       requireAuth(async ()=>{
         const id = btn.dataset.id;
+        const mem = members.find(m=>m.id===id);
         try{
           await setDoc(doc(monthsCol, currentMonth), {
             exempt: { ...md.exempt, [id]: false }
           }, { merge:true });
-        }catch(e){ console.error('restore member failed', e); alert('تعذّر الحفظ.'); }
+          logActivity('إرجاع عضو للشهر', `${mem?mem.name:''} — ${formatMonthLabel(currentMonth)}`);
+        }catch(e){ console.error('restore member failed', e); showAlert('تعذّر الحفظ.'); }
       });
     });
   });
 }
 document.getElementById('monthlySearch').addEventListener('input', renderMonthly);
+
 
 /* ---------- Members ---------- */
 function renderMembers(){
@@ -1009,9 +1128,13 @@ function renderMembers(){
     inp.addEventListener('change', ()=>{
       requireAuth(async ()=>{
         const newName = inp.value.trim();
-        if(!newName){ alert('الاسم لا يمكن أن يكون فارغًا.'); return; }
-        try{ await setDoc(doc(membersCol, inp.dataset.id), { name: newName }, { merge:true }); }
-        catch(e){ console.error('save name failed', e); alert('تعذّر حفظ الاسم.'); }
+        if(!newName){ showAlert('الاسم لا يمكن أن يكون فارغًا.'); return; }
+        const oldName = members.find(m=>m.id===inp.dataset.id)?.name || '';
+        try{
+          await setDoc(doc(membersCol, inp.dataset.id), { name: newName }, { merge:true });
+          logActivity('تعديل اسم عضو', `${oldName} ← ${newName}`);
+        }
+        catch(e){ console.error('save name failed', e); showAlert('تعذّر حفظ الاسم.'); }
       });
     });
   });
@@ -1019,27 +1142,39 @@ function renderMembers(){
     inp.addEventListener('change', ()=>{
       requireAuth(async ()=>{
         const val = inp.value.trim();
-        if(val && !/^\d{2}-\d{2}$/.test(val)){ alert('صيغة التاريخ يجب أن تكون شهر-يوم مثل 09-15'); return; }
-        try{ await setDoc(doc(membersCol, inp.dataset.id), { occDate: val }, { merge:true }); }
-        catch(e){ console.error('save occDate failed', e); alert('تعذّر حفظ تاريخ المناسبة.'); }
+        if(val && !/^\d{2}-\d{2}$/.test(val)){ showAlert('صيغة التاريخ يجب أن تكون شهر-يوم مثل 09-15'); return; }
+        const mem = members.find(m=>m.id===inp.dataset.id);
+        try{
+          await setDoc(doc(membersCol, inp.dataset.id), { occDate: val }, { merge:true });
+          logActivity('تعديل تاريخ مناسبة', `${mem?mem.name:''} — ${val||'حذف التاريخ'}`);
+        }
+        catch(e){ console.error('save occDate failed', e); showAlert('تعذّر حفظ تاريخ المناسبة.'); }
       });
     });
   });
   list.querySelectorAll('.edit-occ-select').forEach(sel=>{
     sel.addEventListener('change', ()=>{
       requireAuth(async ()=>{
-        try{ await setDoc(doc(membersCol, sel.dataset.id), { occLabel: sel.value }, { merge:true }); }
-        catch(e){ console.error('save occLabel failed', e); alert('تعذّر حفظ نوع المناسبة.'); }
+        const mem = members.find(m=>m.id===sel.dataset.id);
+        try{
+          await setDoc(doc(membersCol, sel.dataset.id), { occLabel: sel.value }, { merge:true });
+          logActivity('تعديل نوع مناسبة', `${mem?mem.name:''} — ${sel.value}`);
+        }
+        catch(e){ console.error('save occLabel failed', e); showAlert('تعذّر حفظ نوع المناسبة.'); }
       });
     });
   });
   list.querySelectorAll('.del').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       requireAuth(async ()=>{
-        if(!confirm('هل تريد حذف هذا العضو؟')) return;
+        if(!(await showConfirm('هل تريد حذف هذا العضو؟'))) return;
         const id = btn.dataset.id;
-        try{ await deleteDoc(doc(membersCol, id)); }
-        catch(e){ console.error('delete member failed', e); alert('تعذّر حذف العضو، تأكد من اتصالك بالإنترنت.'); }
+        const mem = members.find(m=>m.id===id);
+        try{
+          await deleteDoc(doc(membersCol, id));
+          logActivity('حذف عضو', mem ? mem.name : '');
+        }
+        catch(e){ console.error('delete member failed', e); showAlert('تعذّر حذف العضو، تأكد من اتصالك بالإنترنت.'); }
       });
     });
   });
@@ -1055,7 +1190,7 @@ function renderMembers(){
         try{
           await setDoc(doc(membersCol, a.id), { order: bOrder }, { merge:true });
           await setDoc(doc(membersCol, b.id), { order: aOrder }, { merge:true });
-        }catch(e){ console.error('reorder failed', e); alert('تعذّر تغيير الترتيب.'); }
+        }catch(e){ console.error('reorder failed', e); showAlert('تعذّر تغيير الترتيب.'); }
       });
     });
   });
@@ -1073,15 +1208,19 @@ function renderMembers(){
         arr.splice(newPos-1, 0, item);
         try{
           await Promise.all(arr.map((m,i)=> setDoc(doc(membersCol, m.id), { order:i }, { merge:true })));
-        }catch(e){ console.error('reorder by number failed', e); alert('تعذّر تغيير الترتيب.'); }
+        }catch(e){ console.error('reorder by number failed', e); showAlert('تعذّر تغيير الترتيب.'); }
       });
     });
   });
   list.querySelectorAll('.note-input').forEach(inp=>{
     inp.addEventListener('change', ()=>{
       requireAuth(async ()=>{
-        try{ await setDoc(doc(membersCol, inp.dataset.id), { note: inp.value }, { merge:true }); }
-        catch(e){ console.error('save note failed', e); alert('تعذّر حفظ الملاحظة.'); }
+        const mem = members.find(m=>m.id===inp.dataset.id);
+        try{
+          await setDoc(doc(membersCol, inp.dataset.id), { note: inp.value }, { merge:true });
+          logActivity('تعديل ملاحظة عضو', `${mem?mem.name:''}`);
+        }
+        catch(e){ console.error('save note failed', e); showAlert('تعذّر حفظ الملاحظة.'); }
       });
     });
   });
@@ -1203,7 +1342,7 @@ function renderDashboard(){
             amount: md.amount,
             payments: { ...md.payments, [id]: true }
           }, { merge:true });
-        }catch(e){ console.error('save payment failed', e); alert('تعذّر حفظ التغيير.'); }
+        }catch(e){ console.error('save payment failed', e); showAlert('تعذّر حفظ التغيير.'); }
       });
     });
   });
@@ -1263,6 +1402,29 @@ function totalCollectedAllTime(){
   });
   return total;
 }
+/* ---------- Activity Log ---------- */
+function timeAgoLabel(iso){
+  try{
+    const d = new Date(iso);
+    return d.toLocaleString('ar-SA', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+  }catch(e){ return iso || ''; }
+}
+function renderActivityLog(){
+  const list = document.getElementById('activityList');
+  list.innerHTML = activityData.length ? '' : '<div class="empty">لا يوجد سجل تعديلات بعد</div>';
+  activityData.forEach(item=>{
+    const row = document.createElement('div');
+    row.className = 'activity-row';
+    row.innerHTML = `
+      <span class="act-who">${escapeHtml(item.who||'غير معروف')}</span>
+      <span class="act-action">${escapeHtml(item.action||'')}</span>
+      <span class="act-details">${escapeHtml(item.details||'')}</span>
+      <span class="act-time">${timeAgoLabel(item.at)}</span>
+    `;
+    list.appendChild(row);
+  });
+}
+
 function renderExpenses(){
   const totalCollected = totalCollectedAllTime();
   const totalSpent = expensesData.reduce((sum,e)=> sum + (Number(e.amount)||0), 0);
@@ -1276,23 +1438,89 @@ function renderExpenses(){
   expensesData.forEach(exp=>{
     const row = document.createElement('div');
     row.className = 'expense-row';
+    const thumb = exp.imageUrl ? `<img class="exp-thumb" src="${exp.imageUrl}" data-full="${exp.imageUrl}" alt="فاتورة ${escapeHtml(exp.name)}">` : '';
     row.innerHTML = `
+      ${thumb}
       <div class="exp-name">${escapeHtml(exp.name)} <span class="exp-date">${exp.date||''}</span></div>
       <div class="exp-amount">${(Number(exp.amount)||0).toLocaleString('ar-SA')} ر.س</div>
-      <button class="del" data-id="${exp.id}" title="حذف المصروف">🗑️</button>
+      <button class="del" data-id="${exp.id}" data-image="${exp.imagePath||''}" title="حذف المصروف">🗑️</button>
     `;
     list.appendChild(row);
+  });
+  list.querySelectorAll('.exp-thumb').forEach(img=>{
+    img.addEventListener('click', ()=> openImageLightbox(img.dataset.full));
   });
   list.querySelectorAll('.del').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       requireAuth(async ()=>{
-        if(!confirm('حذف هذا المصروف؟')) return;
-        try{ await deleteDoc(doc(expensesCol, btn.dataset.id)); }
-        catch(e){ console.error('delete expense failed', e); alert('تعذّر الحذف.'); }
+        if(!(await showConfirm('حذف هذا المصروف؟'))) return;
+        const exp = expensesData.find(x=>x.id===btn.dataset.id);
+        try{
+          await deleteDoc(doc(expensesCol, btn.dataset.id));
+          if(btn.dataset.image){
+            try{ await deleteObject(storageRef(storage, btn.dataset.image)); }catch(e){ /* ignore if already gone */ }
+          }
+          logActivity('حذف مصروف', exp ? `${exp.name} — ${Number(exp.amount)||0} ر.س` : '');
+        }catch(e){ console.error('delete expense failed', e); showAlert('تعذّر الحذف.'); }
       });
     });
   });
 }
+
+function openImageLightbox(url){
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `<img src="${url}" style="max-width:92vw; max-height:88vh; border-radius:10px; box-shadow:var(--shadow);">`;
+  overlay.addEventListener('click', ()=> overlay.remove());
+  document.body.appendChild(overlay);
+}
+
+function compressImage(file, maxDim=1280, quality=0.72){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = ()=>{ img.src = reader.result; };
+    reader.onerror = reject;
+    img.onload = ()=>{
+      let { width, height } = img;
+      if(width > maxDim || height > maxDim){
+        const scale = maxDim / Math.max(width, height);
+        width = Math.round(width*scale); height = Math.round(height*scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      canvas.toBlob(blob=>{
+        if(blob) resolve(blob); else reject(new Error('compress failed'));
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+let selectedExpenseImageBlob = null;
+document.getElementById('newExpenseImage').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  const previewWrap = document.getElementById('expenseImagePreviewWrap');
+  const previewImg = document.getElementById('expenseImagePreview');
+  if(!file){ selectedExpenseImageBlob = null; previewWrap.style.display = 'none'; return; }
+  try{
+    const blob = await compressImage(file);
+    selectedExpenseImageBlob = blob;
+    previewImg.src = URL.createObjectURL(blob);
+    previewWrap.style.display = 'block';
+  }catch(err){
+    console.error('image compress failed', err);
+    showAlert('تعذّر معالجة الصورة، جرّب صورة أخرى.');
+  }
+});
+document.getElementById('removeExpenseImageBtn').addEventListener('click', ()=>{
+  selectedExpenseImageBlob = null;
+  document.getElementById('newExpenseImage').value = '';
+  document.getElementById('expenseImagePreviewWrap').style.display = 'none';
+});
+
 document.getElementById('addExpenseBtn').addEventListener('click', ()=>{
   requireAuth(async ()=>{
     const nameEl = document.getElementById('newExpenseName');
@@ -1301,12 +1529,35 @@ document.getElementById('addExpenseBtn').addEventListener('click', ()=>{
     const name = nameEl.value.trim();
     const amount = Number(amountEl.value);
     if(!name){ nameEl.focus(); return; }
-    if(!amount || amount <= 0){ alert('أدخل مبلغًا صحيحًا أكبر من صفر.'); return; }
+    if(!amount || amount <= 0){ showAlert('أدخل مبلغًا صحيحًا أكبر من صفر.'); return; }
     const date = dateEl.value || dateToKey(new Date());
+    const btn = document.getElementById('addExpenseBtn');
+    const originalText = btn.textContent;
+    const expenseId = uid();
     try{
-      await setDoc(doc(expensesCol, uid()), { name, amount, date });
+      const data = { name, amount, date };
+      if(selectedExpenseImageBlob){
+        btn.textContent = '⏳ جاري رفع الصورة...';
+        btn.disabled = true;
+        const imagePath = `expenses/${expenseId}.jpg`;
+        const sRef = storageRef(storage, imagePath);
+        await uploadBytes(sRef, selectedExpenseImageBlob, { contentType:'image/jpeg' });
+        data.imageUrl = await getDownloadURL(sRef);
+        data.imagePath = imagePath;
+      }
+      await setDoc(doc(expensesCol, expenseId), data);
+      logActivity('إضافة مصروف', `${name} — ${amount} ر.س`);
       nameEl.value=''; amountEl.value=''; dateEl.value='';
-    }catch(e){ console.error('add expense failed', e); alert('تعذّر إضافة المصروف.'); }
+      selectedExpenseImageBlob = null;
+      document.getElementById('newExpenseImage').value = '';
+      document.getElementById('expenseImagePreviewWrap').style.display = 'none';
+    }catch(e){
+      console.error('add expense failed', e);
+      showAlert('تعذّر إضافة المصروف. تأكد من إعداد Firebase Storage (راجع التعليمات).');
+    }finally{
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }
   });
 });
 
@@ -1361,9 +1612,12 @@ function renderRotationTab(){
   list.querySelectorAll('.del').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       requireAuth(async ()=>{
-        if(!confirm('حذف هذا الدور؟')) return;
-        try{ await deleteDoc(doc(rotationCol, btn.dataset.key)); }
-        catch(e){ console.error('delete rotation failed', e); alert('تعذّر الحذف.'); }
+        if(!(await showConfirm('حذف هذا الدور؟'))) return;
+        try{
+          await deleteDoc(doc(rotationCol, btn.dataset.key));
+          logActivity('حذف دور أسبوعي', btn.dataset.key);
+        }
+        catch(e){ console.error('delete rotation failed', e); showAlert('تعذّر الحذف.'); }
       });
     });
   });
@@ -1371,14 +1625,16 @@ function renderRotationTab(){
 document.getElementById('saveRotationBtn').addEventListener('click', ()=>{
   requireAuth(async ()=>{
     const dateEl = document.getElementById('rotationDate');
-    if(!dateEl.value){ alert('اختر تاريخ يوم الاثنين أولاً'); return; }
-    if(selectedRotationMemberIds.size === 0){ alert('اختر عضو واحد على الأقل'); return; }
+    if(!dateEl.value){ showAlert('اختر تاريخ يوم الاثنين أولاً'); return; }
+    if(selectedRotationMemberIds.size === 0){ showAlert('اختر عضو واحد على الأقل'); return; }
     try{
       await setDoc(doc(rotationCol, dateEl.value), { memberIds: Array.from(selectedRotationMemberIds) });
+      const names = Array.from(selectedRotationMemberIds).map(id=>members.find(m=>m.id===id)?.name).filter(Boolean).join('، ');
+      logActivity('تحديد دور أسبوعي', `${dateEl.value} — ${names}`);
       selectedRotationMemberIds = new Set();
       dateEl.value = '';
-      alert('تم حفظ الدور.');
-    }catch(e){ console.error('save rotation failed', e); alert('تعذّر الحفظ.'); }
+      showAlert('تم حفظ الدور.');
+    }catch(e){ console.error('save rotation failed', e); showAlert('تعذّر الحفظ.'); }
   });
 });
 
@@ -1530,7 +1786,7 @@ async function shareTodayImage(){
     canvas.toBlob(async (blob)=>{
       btn.textContent = originalText;
       btn.disabled = false;
-      if(!blob){ alert('تعذّر إنشاء الصورة.'); return; }
+      if(!blob){ showAlert('تعذّر إنشاء الصورة.'); return; }
       const fileName = `قطة_${currentMonth}.png`;
       const file = new File([blob], fileName, { type:'image/png' });
       if(navigator.canShare && navigator.canShare({ files:[file] })){
@@ -1542,14 +1798,14 @@ async function shareTodayImage(){
         const a = document.createElement('a');
         a.href = url; a.download = fileName; a.click();
         URL.revokeObjectURL(url);
-        alert('متصفحك لا يدعم المشاركة المباشرة، تم تنزيل الصورة بدلاً من ذلك — شاركها يدويًا عبر واتساب.');
+        showAlert('متصفحك لا يدعم المشاركة المباشرة، تم تنزيل الصورة بدلاً من ذلك — شاركها يدويًا عبر واتساب.');
       }
     }, 'image/png');
   }catch(e){
     console.error('build share image failed', e);
     btn.textContent = originalText;
     btn.disabled = false;
-    alert('تعذّر إنشاء الصورة.');
+    showAlert('تعذّر إنشاء الصورة.');
   }
 }
 document.getElementById('shareImageBtn').addEventListener('click', shareTodayImage);
@@ -1699,7 +1955,7 @@ async function shareInvite(){
   const mondayKey = dateToKey(monday);
   const entry = rotationData[mondayKey];
   if(!entry || !entry.memberIds || entry.memberIds.length === 0){
-    alert('ما فيه أعضاء محددين لهذا الاثنين بعد. أضفهم أولاً من الأعلى.');
+    showAlert('ما فيه أعضاء محددين لهذا الاثنين بعد. أضفهم أولاً من الأعلى.');
     return;
   }
   const names = entry.memberIds.map(id=>{
@@ -1717,7 +1973,7 @@ async function shareInvite(){
     canvas.toBlob(async (blob)=>{
       btn.textContent = originalText;
       btn.disabled = false;
-      if(!blob){ alert('تعذّر إنشاء البطاقة.'); return; }
+      if(!blob){ showAlert('تعذّر إنشاء البطاقة.'); return; }
       const fileName = `دعوة_عشاء_${mondayKey}.png`;
       const file = new File([blob], fileName, { type:'image/png' });
       if(navigator.canShare && navigator.canShare({ files:[file] })){
@@ -1729,14 +1985,14 @@ async function shareInvite(){
         const a = document.createElement('a');
         a.href = url; a.download = fileName; a.click();
         URL.revokeObjectURL(url);
-        alert('متصفحك لا يدعم المشاركة المباشرة، تم تنزيل البطاقة بدلاً من ذلك — شاركها يدويًا عبر واتساب.');
+        showAlert('متصفحك لا يدعم المشاركة المباشرة، تم تنزيل البطاقة بدلاً من ذلك — شاركها يدويًا عبر واتساب.');
       }
     }, 'image/png');
   }catch(e){
     console.error('build invite image failed', e);
     btn.textContent = originalText;
     btn.disabled = false;
-    alert('تعذّر إنشاء البطاقة.');
+    showAlert('تعذّر إنشاء البطاقة.');
   }
 }
 document.getElementById('shareInviteBtn').addEventListener('click', shareInvite);
@@ -1756,7 +2012,7 @@ function exportMonth(){
 function exportAll(){
   const wb = XLSX.utils.book_new();
   const keys = monthKeysSorted();
-  if(keys.length === 0){ alert('لا يوجد سجل بعد للتصدير'); return; }
+  if(keys.length === 0){ showAlert('لا يوجد سجل بعد للتصدير'); return; }
   keys.forEach(k=>{
     const d = monthsData[k];
     const rows = members.map(m=>{
@@ -1817,12 +2073,16 @@ document.getElementById('changePinBtn').addEventListener('click', ()=>{
   requireAuth(async ()=>{
     const current = prompt('أدخل رمز الدخول الحالي للتأكيد:');
     if(current === null) return;
-    if(current !== accessPin){ alert('الرمز الحالي غير صحيح.'); return; }
+    if(current !== accessPin){ showAlert('الرمز الحالي غير صحيح.'); return; }
     const next = prompt('أدخل رمز الدخول الجديد (٤ أرقام أو أكثر):');
     if(next === null) return;
-    if(!next || next.trim().length < 4){ alert('الرمز الجديد يجب أن يكون ٤ خانات على الأقل.'); return; }
-    try{ await savePin(next.trim()); alert('تم تحديث رمز الدخول. أخبر بقية الأعضاء بالرمز الجديد.'); }
-    catch(e){ console.error('change pin failed', e); alert('تعذّر حفظ الرمز الجديد.'); }
+    if(!next || next.trim().length < 4){ showAlert('الرمز الجديد يجب أن يكون ٤ خانات على الأقل.'); return; }
+    try{
+      await savePin(next.trim());
+      logActivity('تغيير رمز الدخول', 'تم تحديث الرمز المشترك');
+      showAlert('تم تحديث رمز الدخول. أخبر بقية الأعضاء بالرمز الجديد.');
+    }
+    catch(e){ console.error('change pin failed', e); showAlert('تعذّر حفظ الرمز الجديد.'); }
   });
 });
 document.getElementById('modalSubmit').addEventListener('click', async ()=>{
@@ -1839,6 +2099,7 @@ document.getElementById('modalSubmit').addEventListener('click', async ()=>{
       if(pin !== confirmPin){ errEl.textContent = 'الرمزان غير متطابقين.'; return; }
       await savePin(pin);
       saveSessionToLocalStorage({ name });
+      logActivity('إنشاء رمز الدخول', `بواسطة ${name}`);
     }else{
       if(pin !== accessPin){ errEl.textContent = 'رمز الدخول غير صحيح.'; return; }
       saveSessionToLocalStorage({ name });
@@ -1872,8 +2133,11 @@ document.getElementById('monthPicker').addEventListener('change', (e)=>{
 document.getElementById('amountInput').addEventListener('change', (e)=>{
   const newVal = Number(e.target.value) || 0;
   requireAuth(async ()=>{
-    try{ await setDoc(doc(monthsCol, currentMonth), { amount: newVal }, { merge:true }); }
-    catch(e){ console.error('save amount failed', e); alert('تعذّر حفظ التغيير.'); }
+    try{
+      await setDoc(doc(monthsCol, currentMonth), { amount: newVal }, { merge:true });
+      logActivity('تعديل مبلغ القطة', `${formatMonthLabel(currentMonth)} — ${newVal} ر.س`);
+    }
+    catch(e){ console.error('save amount failed', e); showAlert('تعذّر حفظ التغيير.'); }
   });
 });
 
@@ -1887,12 +2151,13 @@ document.getElementById('addMemberBtn').addEventListener('click', ()=>{
     const name = nameEl.value.trim();
     if(!name){ nameEl.focus(); return; }
     let occDate = occEl.value.trim();
-    if(occDate && !/^\d{2}-\d{2}$/.test(occDate)){ alert('صيغة التاريخ يجب أن تكون شهر-يوم مثل 09-15'); return; }
+    if(occDate && !/^\d{2}-\d{2}$/.test(occDate)){ showAlert('صيغة التاريخ يجب أن تكون شهر-يوم مثل 09-15'); return; }
     const nextOrder = members.length ? Math.max(...members.map(m=>m.order ?? 0)) + 1 : 0;
     try{
       await setDoc(doc(membersCol, uid()), { name, occDate: occDate || '', occLabel: occLabelEl.value, note: noteEl.value.trim(), order: nextOrder });
+      logActivity('إضافة عضو جديد', name);
       nameEl.value=''; occEl.value=''; noteEl.value='';
-    }catch(e){ console.error('add member failed', e); alert('تعذّر إضافة العضو.'); }
+    }catch(e){ console.error('add member failed', e); showAlert('تعذّر إضافة العضو.'); }
   });
 });
 
