@@ -7,7 +7,7 @@
 
 <!-- PWA / إضافة للشاشة الرئيسية (آيفون وأندرويد) -->
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#16342a">
+<meta name="theme-color" content="#0e1226">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -21,50 +21,51 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root, [data-theme="dark"]{
-    --ink:#eee7d6;
-    --paper:#f3ecd8;
-    --paper-dim:#e9e0c8;
-    --ledger:#16342a;
-    --ledger-deep:#0e2620;
-    --ledger-line:#2b5346;
-    --copper:#c08a44;
-    --copper-bright:#e0a75c;
-    --stamp-red:#8c3a2b;
-    --ok:#4f7d5a;
-    --bad:#a34a3a;
-    --card-text:#231a10;
-    --card-sub:#7a6c47;
-    --card-border:#d9cda0;
-    --input-bg:#fffdf7;
-    --input-border:#b8ab84;
-    --shadow: 0 10px 30px rgba(0,0,0,.35);
-    --avatar-colors: #c08a44,#4f7d5a,#8c3a2b,#4a86a8,#7d5a9e,#a86b4a,#3f8f7a,#a84a6b;
+    --ink:#f0e6d2;
+    --paper:#ede1c8;
+    --paper-dim:#e2d3ab;
+    --ledger:#1c2440;
+    --ledger-deep:#0e1226;
+    --ledger-line:#3a4470;
+    --copper:#c07830;
+    --copper-bright:#e2a53f;
+    --stamp-red:#a8482f;
+    --ok:#5c8f52;
+    --bad:#a8482f;
+    --card-text:#2c2013;
+    --card-sub:#7a6142;
+    --card-border:#d4c19a;
+    --input-bg:#fffaf0;
+    --input-border:#c2a877;
+    --shadow: 0 10px 30px rgba(0,0,0,.4);
+    --avatar-colors: #c07830,#5c8f52,#a8482f,#3f6d8f,#7d5a9e,#b08a3f,#3f8f7a,#a8483f;
   }
   [data-theme="light"]{
-    --ink:#2a2318;
-    --paper:#ffffff;
-    --paper-dim:#f4efe2;
-    --ledger:#f0e9d6;
-    --ledger-deep:#e8dfc7;
-    --ledger-line:#d8cba3;
-    --copper:#b4783a;
-    --copper-bright:#96612c;
-    --stamp-red:#8c3a2b;
-    --ok:#3d6b48;
-    --bad:#a34a3a;
-    --card-text:#231a10;
-    --card-sub:#7a6c47;
-    --card-border:#d9cda0;
-    --input-bg:#fbf8f0;
-    --input-border:#c9bb8e;
-    --shadow: 0 8px 24px rgba(80,60,20,.12);
+    --ink:#2c2013;
+    --paper:#fffaf0;
+    --paper-dim:#f5ecd8;
+    --ledger:#f3e6c9;
+    --ledger-deep:#ecd9b0;
+    --ledger-line:#ddc99a;
+    --copper:#b06b28;
+    --copper-bright:#8f5620;
+    --stamp-red:#a8482f;
+    --ok:#4a7a42;
+    --bad:#a8482f;
+    --card-text:#2c2013;
+    --card-sub:#7a6142;
+    --card-border:#d4c19a;
+    --input-bg:#fdf8ec;
+    --input-border:#cbb488;
+    --shadow: 0 8px 24px rgba(90,60,20,.14);
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;background:transparent;color:var(--ink);}
   body{
     font-family:'Cairo', sans-serif;
     background:
-      radial-gradient(1200px 600px at 15% -10%, rgba(224,167,92,.08), transparent 60%),
+      radial-gradient(1000px 500px at 85% -8%, rgba(226,165,63,.10), transparent 60%),
+      radial-gradient(900px 400px at 20% 105%, rgba(192,120,48,.12), transparent 65%),
       linear-gradient(180deg, var(--ledger) 0%, var(--ledger-deep) 100%);
     min-height:100vh;
     padding:20px 14px 60px;
@@ -74,26 +75,42 @@
 
   /* Header */
   .masthead{
+    position:relative;
     display:flex; align-items:center; justify-content:space-between; gap:16px;
-    padding-bottom:16px; margin-bottom:18px;
-    border-bottom:2px solid var(--ledger-line);
+    padding-bottom:26px; margin-bottom:26px;
     flex-wrap:wrap;
+  }
+  .masthead::before{
+    content:'';
+    position:absolute; right:0; left:0; bottom:14px;
+    height:1px; background:var(--ledger-line);
+  }
+  .masthead::after{
+    content:'';
+    position:absolute; right:0; left:0; bottom:0;
+    height:14px;
+    background-image:
+      linear-gradient(45deg, transparent 33.33%, var(--copper) 33.33%, var(--copper) 66.66%, transparent 66.66%),
+      linear-gradient(-45deg, transparent 33.33%, var(--copper) 33.33%, var(--copper) 66.66%, transparent 66.66%);
+    background-size: 20px 20px;
+    background-repeat: repeat-x;
+    opacity:.82;
   }
   .masthead h1{
     font-family:'Markazi Text', 'Cairo', serif;
-    font-weight:700; font-size:2.3rem; margin:0; color:var(--copper-bright);
-    letter-spacing:.5px;
+    font-weight:700; font-size:2.5rem; margin:0; color:var(--copper-bright);
+    letter-spacing:1px;
   }
   .masthead .sub{ font-size:.82rem; color:#b9c9bd; margin-top:2px; }
   [data-theme="light"] .masthead .sub{ color:#6b6552; }
   .head-right{ display:flex; align-items:center; gap:10px; }
   .seal{
-    width:54px;height:54px;border-radius:50%;
+    width:56px;height:60px;
+    border-radius:50% 50% 6px 6px / 60% 60% 6px 6px;
     border:3px solid var(--copper);
     display:flex;align-items:center;justify-content:center;
     font-size:1.4rem; color:var(--copper-bright); flex-shrink:0;
-    background:radial-gradient(circle at 35% 30%, rgba(224,167,92,.15), transparent 70%);
-    transform:rotate(-6deg);
+    background:radial-gradient(circle at 35% 25%, rgba(226,165,63,.18), transparent 70%);
   }
   .theme-toggle{
     width:40px; height:40px; border-radius:50%; border:1.5px solid var(--ledger-line);
@@ -126,10 +143,18 @@
     border:1px solid rgba(0,0,0,.08);
   }
   .card h2{
-    font-family:'Markazi Text','Cairo',serif; font-size:1.4rem; margin:0 0 12px;
-    color:var(--ledger-deep-text, var(--card-text)); border-bottom:1px solid rgba(0,0,0,.1); padding-bottom:8px;
+    font-family:'Markazi Text','Cairo',serif; font-size:1.4rem; margin:0 0 14px;
+    color:var(--card-text); padding-bottom:10px; position:relative;
   }
-  [data-theme="dark"] .card h2, :root:not([data-theme]) .card h2{ color:#16342a; }
+  .card h2::after{
+    content:''; position:absolute; right:0; left:0; bottom:0; height:6px;
+    background-image:
+      linear-gradient(45deg, transparent 33.33%, var(--copper) 33.33%, var(--copper) 66.66%, transparent 66.66%),
+      linear-gradient(-45deg, transparent 33.33%, var(--copper) 33.33%, var(--copper) 66.66%, transparent 66.66%);
+    background-size: 10px 10px;
+    background-repeat: repeat-x;
+    opacity:.5;
+  }
 
   .card-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   @media (max-width:720px){ .card-grid{ grid-template-columns:1fr; } }
@@ -326,7 +351,7 @@
     border:1px solid rgba(0,0,0,.1);
   }
   .modal-box h3{
-    font-family:'Markazi Text','Cairo',serif; font-size:1.4rem; margin:0 0 6px; color:var(--ledger-deep-text, #16342a);
+    font-family:'Markazi Text','Cairo',serif; font-size:1.4rem; margin:0 0 6px; color:var(--card-text);
   }
   .modal-box p.hint{ font-size:.78rem; color:var(--card-sub); margin:0 0 14px; }
   .modal-box label{ display:block; font-size:.8rem; margin:10px 0 5px; color:var(--card-sub); font-weight:700; }
@@ -1672,15 +1697,15 @@ async function buildShareCanvas(){
 
   // Background gradient
   const bg = ctx.createLinearGradient(0,0,0,H);
-  bg.addColorStop(0, '#16342a');
-  bg.addColorStop(1, '#0e2620');
+  bg.addColorStop(0, '#1c2440');
+  bg.addColorStop(1, '#0e1226');
   ctx.fillStyle = bg;
   ctx.fillRect(0,0,W,H);
 
   // Warm glow accent
   const glow = ctx.createRadialGradient(W*0.82, 70, 10, W*0.82, 70, 420);
-  glow.addColorStop(0, 'rgba(224,167,92,0.20)');
-  glow.addColorStop(1, 'rgba(224,167,92,0)');
+  glow.addColorStop(0, 'rgba(226,165,63,0.20)');
+  glow.addColorStop(1, 'rgba(226,165,63,0)');
   ctx.fillStyle = glow;
   ctx.fillRect(0,0,W,H);
 
@@ -1690,14 +1715,14 @@ async function buildShareCanvas(){
   for(let y=0; y<H; y+=38){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
 
   // Outer frame
-  ctx.strokeStyle = 'rgba(224,167,92,0.35)';
+  ctx.strokeStyle = 'rgba(226,165,63,0.35)';
   ctx.lineWidth = 3;
   roundRect(ctx, 20, 20, W-40, H-40, 24);
   ctx.stroke();
 
   // Title
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#e0a75c';
+  ctx.fillStyle = '#e2a53f';
   ctx.font = "700 62px 'Markazi Text', 'Cairo', sans-serif";
   ctx.fillText('💰 استراحة الدرعية', W/2, 105);
 
@@ -1705,7 +1730,7 @@ async function buildShareCanvas(){
   ctx.fillStyle = '#dce7de';
   ctx.fillText(`قطة شهر ${formatMonthLabel(currentMonth)}`, W/2, 155);
 
-  ctx.strokeStyle = '#2b5346';
+  ctx.strokeStyle = '#3a4470';
   ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(marginX, 185); ctx.lineTo(W-marginX, 185); ctx.stroke();
 
@@ -1857,7 +1882,7 @@ async function buildInviteCanvas(names, customMessage, mondayDate){
 
   // Radial gold glows top & bottom
   const glow1 = ctx.createRadialGradient(W/2, 0, 10, W/2, 0, 500);
-  glow1.addColorStop(0, 'rgba(224,167,92,0.35)');
+  glow1.addColorStop(0, 'rgba(226,165,63,0.35)');
   glow1.addColorStop(1, 'rgba(224,167,92,0)');
   ctx.fillStyle = glow1;
   ctx.fillRect(0,0,W,H);
@@ -1928,7 +1953,7 @@ async function buildInviteCanvas(names, customMessage, mondayDate){
     ctx.fillStyle = 'rgba(0,0,0,0.18)';
     roundRect(ctx, marginX, boxTop, W-marginX*2, boxH, 16);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(224,167,92,0.35)';
+    ctx.strokeStyle = 'rgba(226,165,63,0.35)';
     ctx.lineWidth = 1.5;
     roundRect(ctx, marginX, boxTop, W-marginX*2, boxH, 16);
     ctx.stroke();
