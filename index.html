@@ -615,6 +615,9 @@
         <div class="stat warn"><div class="n" id="expTotalSpent">0</div><div class="l">إجمالي المصروفات (ر.س)</div></div>
         <div class="stat"><div class="n" id="expRemaining">0</div><div class="l">المتبقي (ر.س)</div></div>
       </div>
+      <div style="margin-top:12px;">
+        <button class="btn" id="shareExpensesImageBtn">📸 مشاركة تقرير المصروفات</button>
+      </div>
     </div>
     <div class="card">
       <h2>إضافة مصروف جديد</h2>
@@ -1834,6 +1837,139 @@ async function shareTodayImage(){
   }
 }
 document.getElementById('shareImageBtn').addEventListener('click', shareTodayImage);
+
+/* ---------- Expenses report share image ---------- */
+async function buildExpensesShareCanvas(){
+  if(document.fonts && document.fonts.ready) await document.fonts.ready;
+  const totalCollected = totalCollectedAllTime();
+  const totalSpent = expensesData.reduce((sum,e)=> sum + (Number(e.amount)||0), 0);
+  const remaining = totalCollected - totalSpent;
+
+  const W = 1080;
+  const marginX = 64;
+  const rowH = 58;
+  const listTop = 400;
+  const H = listTop + Math.max(expensesData.length,1)*rowH + 150;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.direction = 'rtl';
+
+  const bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0, '#1c2440');
+  bg.addColorStop(1, '#0e1226');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,W,H);
+
+  const glow = ctx.createRadialGradient(W*0.82, 70, 10, W*0.82, 70, 420);
+  glow.addColorStop(0, 'rgba(226,165,63,0.20)');
+  glow.addColorStop(1, 'rgba(226,165,63,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0,0,W,H);
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = 1;
+  for(let y=0; y<H; y+=38){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+  ctx.strokeStyle = 'rgba(226,165,63,0.35)';
+  ctx.lineWidth = 3;
+  roundRect(ctx, 20, 20, W-40, H-40, 24);
+  ctx.stroke();
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#e2a53f';
+  ctx.font = "700 62px 'Markazi Text', 'Cairo', sans-serif";
+  ctx.fillText('💰 استراحة الدرعية', W/2, 105);
+
+  ctx.font = "600 34px 'Cairo', sans-serif";
+  ctx.fillStyle = '#dce7de';
+  const now = new Date();
+  ctx.fillText(`تقرير المصروفات — ${now.toLocaleDateString('ar-SA')}`, W/2, 155);
+
+  ctx.strokeStyle = '#3a4470';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(marginX, 185); ctx.lineTo(W-marginX, 185); ctx.stroke();
+
+  ctx.font = "700 30px 'Cairo', sans-serif";
+  ctx.fillStyle = '#5c8f52';
+  ctx.fillText(`✅ المحصّل: ${totalCollected.toLocaleString('ar-SA')} ر.س`, W/2, 240);
+  ctx.fillStyle = '#a8482f';
+  ctx.fillText(`💸 المصروفات: ${totalSpent.toLocaleString('ar-SA')} ر.س`, W/2, 285);
+  ctx.font = "900 44px 'Cairo', sans-serif";
+  ctx.fillStyle = '#f3ecd8';
+  ctx.fillText(`المتبقي: ${remaining.toLocaleString('ar-SA')} ر.س`, W/2, 345);
+
+  ctx.font = "700 28px 'Cairo', sans-serif";
+  ctx.fillStyle = '#e2a53f';
+  ctx.textAlign = 'center';
+  ctx.fillText(`تفاصيل المصروفات (${expensesData.length})`, W/2, listTop - 20);
+
+  if(expensesData.length === 0){
+    ctx.font = "500 26px 'Cairo', sans-serif";
+    ctx.fillStyle = '#9fb0a3';
+    ctx.fillText('لا يوجد مصروفات مسجّلة', W/2, listTop + 30);
+  }else{
+    const rowW = W - marginX*2;
+    ctx.font = "500 26px 'Cairo', sans-serif";
+    expensesData.forEach((exp,i)=>{
+      const y = listTop + i*rowH;
+      ctx.fillStyle = 'rgba(226,165,63,0.10)';
+      roundRect(ctx, marginX, y, rowW, rowH-14, 10);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(226,165,63,0.35)';
+      ctx.lineWidth = 1.5;
+      roundRect(ctx, marginX, y, rowW, rowH-14, 10);
+      ctx.stroke();
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#f3ecd8';
+      ctx.fillText(exp.name, W - marginX - 20, y + (rowH-14)/2 + 9);
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#e2a53f';
+      ctx.fillText(`${(Number(exp.amount)||0).toLocaleString('ar-SA')} ر.س`, marginX + 20, y + (rowH-14)/2 + 9);
+    });
+    ctx.textAlign = 'center';
+  }
+
+  ctx.font = "400 22px 'Cairo', sans-serif";
+  ctx.fillStyle = '#7f8f83';
+  ctx.fillText('أُنشئ تلقائيًا من تطبيق استراحة الدرعية', W/2, H-40);
+
+  return canvas;
+}
+async function shareExpensesImage(){
+  const btn = document.getElementById('shareExpensesImageBtn');
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ جاري التجهيز...';
+  btn.disabled = true;
+  try{
+    const canvas = await buildExpensesShareCanvas();
+    canvas.toBlob(async (blob)=>{
+      btn.textContent = originalText;
+      btn.disabled = false;
+      if(!blob){ showAlert('تعذّر إنشاء الصورة.'); return; }
+      const fileName = `مصروفات_${dateToKey(new Date())}.png`;
+      const file = new File([blob], fileName, { type:'image/png' });
+      if(navigator.canShare && navigator.canShare({ files:[file] })){
+        try{
+          await navigator.share({ files:[file], title:'تقرير مصروفات استراحة الدرعية', text:'تقرير المصروفات' });
+        }catch(e){ /* user cancelled share, ignore */ }
+      }else{
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = fileName; a.click();
+        URL.revokeObjectURL(url);
+        showAlert('متصفحك لا يدعم المشاركة المباشرة، تم تنزيل الصورة بدلاً من ذلك — شاركها يدويًا عبر واتساب.');
+      }
+    }, 'image/png');
+  }catch(e){
+    console.error('build expenses share image failed', e);
+    btn.textContent = originalText;
+    btn.disabled = false;
+    showAlert('تعذّر إنشاء الصورة.');
+  }
+}
+document.getElementById('shareExpensesImageBtn').addEventListener('click', shareExpensesImage);
 
 /* ---------- Monday dinner invitation card ---------- */
 function wrapText(ctx, text, maxWidth){
