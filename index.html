@@ -206,6 +206,29 @@
   .activity-row .act-who{ font-weight:800; color:var(--stamp-red); }
   .activity-row .act-action{ font-weight:700; }
   .activity-row .act-details{ color:var(--card-sub); }
+  .suggestion-card{
+    background:var(--input-bg); border:1px solid var(--card-border); border-radius:10px;
+    padding:14px; margin-bottom:12px;
+  }
+  .suggestion-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; }
+  .suggestion-title{ font-weight:800; font-size:1.05rem; }
+  .suggestion-desc{ font-size:.8rem; color:var(--card-sub); margin-top:2px; }
+  .suggestion-amounts{ font-size:.82rem; color:var(--card-sub); text-align:left; white-space:nowrap; }
+  .suggestion-amounts b{ color:var(--card-text); font-size:1rem; }
+  .progress-track{
+    height:10px; border-radius:999px; background:var(--card-border); overflow:hidden; margin:10px 0;
+  }
+  .progress-fill{ height:100%; background:var(--ok); border-radius:999px; transition:width .3s ease; }
+  .progress-fill.over{ background:var(--copper); }
+  .suggestion-actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .suggestion-actions .btn, .suggestion-actions .link-btn{ font-size:.78rem; padding:6px 12px; }
+  .contrib-row{
+    display:flex; align-items:center; gap:8px; padding:6px 2px; border-bottom:1px dashed var(--card-border);
+  }
+  .contrib-amount-input{
+    width:90px; padding:5px 7px; border-radius:6px; border:1px solid var(--input-border);
+    font-family:'Cairo'; font-size:.78rem; background:var(--paper); color:var(--card-text); text-align:center;
+  }
   .order-num-input{
     width:44px; padding:4px 2px; border-radius:6px; border:1px solid var(--input-border);
     font-family:'Cairo'; font-size:.8rem; background:var(--input-bg); color:var(--card-text); text-align:center;
@@ -439,6 +462,7 @@
     <button class="tab-btn" data-tab="rotation">دور عشاء الاثنين</button>
     <button class="tab-btn" data-tab="expenses">المصروفات</button>
     <button class="tab-btn" data-tab="activity">سجل التعديلات</button>
+    <button class="tab-btn" data-tab="suggestions">الاقتراحات</button>
   </div>
 
   <!-- Dashboard Tab -->
@@ -485,13 +509,8 @@
 
     <div class="card-grid">
       <div class="card">
-        <h2>نسبة الالتزام العامة</h2>
-        <div class="dash-hero" style="justify-content:center;">
-          <div style="text-align:center;">
-            <div class="dash-big" id="complianceRate" style="color:var(--ok)">0%</div>
-            <div class="dash-label">من إجمالي القطات المستحقة عبر كل الأشهر</div>
-          </div>
-        </div>
+        <h2>الاقتراحات النشطة 💡</h2>
+        <div id="dashSuggestions"></div>
       </div>
       <div class="card">
         <h2>مناسبات قريبة</h2>
@@ -651,6 +670,30 @@
     </div>
   </div>
 
+  <!-- Suggestions Tab -->
+  <div class="panel" id="panel-suggestions">
+    <div class="card">
+      <h2>اقتراح جديد</h2>
+      <p class="dash-label" style="margin-bottom:10px;">مثل: صيانة المكيف، شراء شاشة، تجديد الأثاث... حدد المبلغ المطلوب وتابع من ساهم.</p>
+      <div class="add-member-form">
+        <input type="text" id="newSuggestionTitle" placeholder="عنوان الاقتراح" style="flex:1; min-width:180px;">
+        <input type="number" id="newSuggestionAmount" placeholder="المبلغ المطلوب (ر.س)" min="0" step="1" style="width:160px;">
+      </div>
+      <div class="add-member-form" style="margin-top:8px;">
+        <input type="text" id="newSuggestionDesc" placeholder="وصف مختصر (اختياري)" style="flex:1; min-width:220px;">
+        <button class="btn" id="addSuggestionBtn">إضافة الاقتراح</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>الاقتراحات النشطة</h2>
+      <div id="activeSuggestionsList"></div>
+    </div>
+    <div class="card">
+      <h2>الاقتراحات المكتملة</h2>
+      <div id="completedSuggestionsList"></div>
+    </div>
+  </div>
+
   <footer>هذا الدفتر مشترك بين جميع من يفتح هذا التطبيق — أي تعديل يظهر للجميع.</footer>
 </div>
 
@@ -720,12 +763,15 @@ const rotationCol = collection(db, 'rotation');
 const expensesCol = collection(db, 'expenses');
 const activityCol = collection(db, 'activityLog');
 const activityQuery = query(activityCol, orderBy('at','desc'), limit(150));
+const suggestionsCol = collection(db, 'suggestions');
 
 let members = [];
 let monthsData = {};
 let rotationData = {};
 let expensesData = [];
 let activityData = [];
+let suggestionsData = [];
+let expandedSuggestionIds = new Set();
 let selectedRotationMemberIds = new Set();
 // القطة تبدأ تُجمع قبل الشهر المستهدف بأسبوع إلى أسبوع ونصف تقريبًا،
 // فإذا كنا في العشرين وما بعده من الشهر، الافتراضي يكون الشهر الجاي (لأن القطة الجارية فعليًا له).
@@ -744,7 +790,7 @@ const DEFAULT_AMOUNT = 100;
 let accessPin = null;
 let session = null;
 let pendingAction = null;
-const ready = { members:false, months:false, pin:false, rotation:false, expenses:false, activity:false };
+const ready = { members:false, months:false, pin:false, rotation:false, expenses:false, activity:false, suggestions:false };
 const AVATAR_COLORS = ['#c08a44','#4f7d5a','#8c3a2b','#4a86a8','#7d5a9e','#a86b4a','#3f8f7a','#a84a6b'];
 
 function uid(){ return 'm_' + Math.random().toString(36).slice(2,9); }
@@ -783,7 +829,7 @@ function clearSessionLocalStorage(){
 }
 
 function maybeRender(){
-  if(ready.members && ready.months && ready.pin && ready.rotation && ready.expenses && ready.activity){
+  if(ready.members && ready.months && ready.pin && ready.rotation && ready.expenses && ready.activity && ready.suggestions){
     render();
     renderSessionBar();
   }
@@ -828,6 +874,13 @@ onSnapshot(activityQuery, snap=>{
   ready.activity = true;
   maybeRender();
 }, err=>console.error('activity listener error', err));
+
+onSnapshot(suggestionsCol, snap=>{
+  suggestionsData = snap.docs.map(d=>({ id: d.id, ...d.data() }));
+  suggestionsData.sort((a,b)=> (b.createdAt||'').localeCompare(a.createdAt||''));
+  ready.suggestions = true;
+  maybeRender();
+}, err=>console.error('suggestions listener error', err));
 
 async function savePin(pin){ await setDoc(pinDocRef, { value: pin }); }
 
@@ -968,6 +1021,7 @@ function render(){
   renderRotationTab();
   renderExpenses();
   renderActivityLog();
+  renderSuggestions();
 }
 
 /* ---------- Monthly ---------- */
@@ -1375,17 +1429,23 @@ function renderDashboard(){
     });
   });
 
-  // Overall compliance rate across all months and members (exempted entries excluded)
-  const allKeys = monthKeysSorted();
-  let totalPaid = 0, totalExpected = 0;
-  allKeys.forEach(k=>{
-    const stats = activeStatsForMonth(k);
-    totalExpected += stats.total;
-    totalPaid += stats.paidCount;
+  // Active suggestions summary
+  const dashSugHolder = document.getElementById('dashSuggestions');
+  const activeSugs = suggestionsData.filter(s=> s.status !== 'completed');
+  dashSugHolder.innerHTML = activeSugs.length ? '' : '<div class="empty">لا يوجد اقتراحات نشطة حاليًا</div>';
+  activeSugs.forEach(sug=>{
+    const { collected, target, pct } = suggestionTotals(sug);
+    const row = document.createElement('div');
+    row.style.marginBottom = '10px';
+    row.innerHTML = `
+      <div style="display:flex; justify-content:space-between; font-size:.85rem; margin-bottom:4px;">
+        <span style="font-weight:700;">${escapeHtml(sug.title)}</span>
+        <span style="color:var(--card-sub);">${collected.toLocaleString('ar-SA')} / ${target.toLocaleString('ar-SA')} ر.س</span>
+      </div>
+      <div class="progress-track"><div class="progress-fill ${pct>=100?'over':''}" style="width:${pct}%"></div></div>
+    `;
+    dashSugHolder.appendChild(row);
   });
-  document.getElementById('complianceRate').textContent = totalExpected > 0
-    ? Math.round(totalPaid/totalExpected*100) + '%'
-    : '—';
 
   // Upcoming occasions preview (next 2)
   const withOcc = members.filter(m=>m.occDate && /^\d{2}-\d{2}$/.test(m.occDate))
@@ -1452,6 +1512,154 @@ function renderActivityLog(){
     list.appendChild(row);
   });
 }
+
+/* ---------- Suggestions (fundraising proposals) ---------- */
+function suggestionTotals(sug){
+  const payments = sug.payments || {};
+  const collected = Object.values(payments).reduce((sum,v)=> sum + (Number(v)||0), 0);
+  const target = Number(sug.targetAmount)||0;
+  const pct = target > 0 ? Math.min(100, Math.round(collected/target*100)) : 0;
+  return { collected, target, pct };
+}
+function renderSuggestionCard(sug){
+  const { collected, target, pct } = suggestionTotals(sug);
+  const expanded = expandedSuggestionIds.has(sug.id);
+  const card = document.createElement('div');
+  card.className = 'suggestion-card';
+  card.innerHTML = `
+    <div class="suggestion-head">
+      <div>
+        <div class="suggestion-title">${escapeHtml(sug.title)}</div>
+        ${sug.description ? `<div class="suggestion-desc">${escapeHtml(sug.description)}</div>` : ''}
+      </div>
+      <div class="suggestion-amounts"><b>${collected.toLocaleString('ar-SA')}</b> / ${target.toLocaleString('ar-SA')} ر.س</div>
+    </div>
+    <div class="progress-track"><div class="progress-fill ${pct>=100?'over':''}" style="width:${pct}%"></div></div>
+    <div class="suggestion-actions">
+      <button class="link-btn toggle-expand-btn" data-id="${sug.id}">${expanded?'إخفاء المساهمين ▲':'عرض المساهمين ▼'}</button>
+      <button class="btn secondary share-suggestion-btn" data-id="${sug.id}">📸 مشاركة</button>
+      ${sug.status !== 'completed' ? `<button class="btn secondary mark-complete-btn" data-id="${sug.id}">✅ تحديد كمكتمل</button>` : `<button class="btn secondary reopen-btn" data-id="${sug.id}">↩️ إعادة فتح</button>`}
+      <button class="link-btn del-suggestion-btn" data-id="${sug.id}" style="color:var(--bad);">🗑️ حذف</button>
+    </div>
+    <div class="suggestion-members" data-id="${sug.id}" style="${expanded?'':'display:none;'} margin-top:10px;"></div>
+  `;
+  if(expanded){
+    const wrap = card.querySelector('.suggestion-members');
+    if(members.length === 0){
+      wrap.innerHTML = '<div class="empty">لا يوجد أعضاء بعد</div>';
+    }else{
+      members.forEach(mem=>{
+        const amt = (sug.payments && sug.payments[mem.id]) || 0;
+        const row = document.createElement('div');
+        row.className = 'contrib-row';
+        row.innerHTML = `
+          ${avatarHtml(mem.name)}
+          <div class="m-main"><div class="m-name">${escapeHtml(mem.name)}</div></div>
+          <input type="number" class="contrib-amount-input" data-sug="${sug.id}" data-member="${mem.id}" value="${amt||''}" placeholder="0" min="0">
+        `;
+        wrap.appendChild(row);
+      });
+    }
+  }
+  return card;
+}
+function renderSuggestions(){
+  const activeList = document.getElementById('activeSuggestionsList');
+  const completedList = document.getElementById('completedSuggestionsList');
+  const active = suggestionsData.filter(s=> s.status !== 'completed');
+  const completed = suggestionsData.filter(s=> s.status === 'completed');
+
+  activeList.innerHTML = active.length ? '' : '<div class="empty">لا يوجد اقتراحات نشطة حاليًا</div>';
+  active.forEach(sug=> activeList.appendChild(renderSuggestionCard(sug)));
+
+  completedList.innerHTML = completed.length ? '' : '<div class="empty">لا يوجد اقتراحات مكتملة بعد</div>';
+  completed.forEach(sug=> completedList.appendChild(renderSuggestionCard(sug)));
+
+  document.querySelectorAll('.toggle-expand-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.dataset.id;
+      if(expandedSuggestionIds.has(id)) expandedSuggestionIds.delete(id);
+      else expandedSuggestionIds.add(id);
+      renderSuggestions();
+    });
+  });
+  document.querySelectorAll('.share-suggestion-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const sug = suggestionsData.find(s=>s.id===btn.dataset.id);
+      if(sug) shareSuggestionImage(sug, btn);
+    });
+  });
+  document.querySelectorAll('.mark-complete-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      requireAuth(async ()=>{
+        const sug = suggestionsData.find(s=>s.id===btn.dataset.id);
+        try{
+          await setDoc(doc(suggestionsCol, btn.dataset.id), { status:'completed' }, { merge:true });
+          logActivity('إتمام اقتراح', sug ? sug.title : '');
+        }catch(e){ console.error('complete suggestion failed', e); showAlert('تعذّر الحفظ.'); }
+      });
+    });
+  });
+  document.querySelectorAll('.reopen-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      requireAuth(async ()=>{
+        const sug = suggestionsData.find(s=>s.id===btn.dataset.id);
+        try{
+          await setDoc(doc(suggestionsCol, btn.dataset.id), { status:'active' }, { merge:true });
+          logActivity('إعادة فتح اقتراح', sug ? sug.title : '');
+        }catch(e){ console.error('reopen suggestion failed', e); showAlert('تعذّر الحفظ.'); }
+      });
+    });
+  });
+  document.querySelectorAll('.del-suggestion-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      requireAuth(async ()=>{
+        if(!(await showConfirm('حذف هذا الاقتراح نهائيًا؟'))) return;
+        const sug = suggestionsData.find(s=>s.id===btn.dataset.id);
+        try{
+          await deleteDoc(doc(suggestionsCol, btn.dataset.id));
+          logActivity('حذف اقتراح', sug ? sug.title : '');
+        }catch(e){ console.error('delete suggestion failed', e); showAlert('تعذّر الحذف.'); }
+      });
+    });
+  });
+  document.querySelectorAll('.contrib-amount-input').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      requireAuth(async ()=>{
+        const sugId = inp.dataset.sug;
+        const memberId = inp.dataset.member;
+        const sug = suggestionsData.find(s=>s.id===sugId);
+        const mem = members.find(m=>m.id===memberId);
+        const val = Math.max(0, Number(inp.value)||0);
+        try{
+          await setDoc(doc(suggestionsCol, sugId), {
+            payments: { ...(sug?.payments||{}), [memberId]: val }
+          }, { merge:true });
+          logActivity('تحديث مساهمة', `${sug?sug.title:''} — ${mem?mem.name:''} — ${val} ر.س`);
+        }catch(e){ console.error('save contribution failed', e); showAlert('تعذّر الحفظ.'); }
+      });
+    });
+  });
+}
+document.getElementById('addSuggestionBtn').addEventListener('click', ()=>{
+  requireAuth(async ()=>{
+    const titleEl = document.getElementById('newSuggestionTitle');
+    const amountEl = document.getElementById('newSuggestionAmount');
+    const descEl = document.getElementById('newSuggestionDesc');
+    const title = titleEl.value.trim();
+    const targetAmount = Number(amountEl.value);
+    if(!title){ titleEl.focus(); return; }
+    if(!targetAmount || targetAmount <= 0){ showAlert('أدخل مبلغًا مطلوبًا صحيحًا أكبر من صفر.'); return; }
+    try{
+      await setDoc(doc(suggestionsCol, uid()), {
+        title, targetAmount, description: descEl.value.trim(),
+        payments: {}, status: 'active', createdAt: new Date().toISOString()
+      });
+      logActivity('إضافة اقتراح', `${title} — ${targetAmount} ر.س`);
+      titleEl.value=''; amountEl.value=''; descEl.value='';
+    }catch(e){ console.error('add suggestion failed', e); showAlert('تعذّر إضافة الاقتراح.'); }
+  });
+});
 
 function renderExpenses(){
   const totalCollected = totalCollectedAllTime();
@@ -1970,6 +2178,149 @@ async function shareExpensesImage(){
   }
 }
 document.getElementById('shareExpensesImageBtn').addEventListener('click', shareExpensesImage);
+
+/* ---------- Suggestion progress share image ---------- */
+async function buildSuggestionShareCanvas(sug){
+  if(document.fonts && document.fonts.ready) await document.fonts.ready;
+  const { collected, target, pct } = suggestionTotals(sug);
+  const contributors = members
+    .map(m=>({ name:m.name, amt:(sug.payments && sug.payments[m.id]) || 0 }))
+    .filter(c=>c.amt > 0)
+    .sort((a,b)=> b.amt - a.amt);
+
+  const W = 1080;
+  const marginX = 64;
+  const rowH = 58;
+  const listTop = 460;
+  const H = listTop + Math.max(contributors.length,1)*rowH + 150;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.direction = 'rtl';
+
+  const bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0, '#1c2440');
+  bg.addColorStop(1, '#0e1226');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,W,H);
+
+  const glow = ctx.createRadialGradient(W*0.82, 70, 10, W*0.82, 70, 420);
+  glow.addColorStop(0, 'rgba(226,165,63,0.20)');
+  glow.addColorStop(1, 'rgba(226,165,63,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0,0,W,H);
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = 1;
+  for(let y=0; y<H; y+=38){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+  ctx.strokeStyle = 'rgba(226,165,63,0.35)';
+  ctx.lineWidth = 3;
+  roundRect(ctx, 20, 20, W-40, H-40, 24);
+  ctx.stroke();
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#e2a53f';
+  ctx.font = "700 62px 'Markazi Text', 'Cairo', sans-serif";
+  ctx.fillText('💡 استراحة الدرعية', W/2, 105);
+
+  ctx.font = "700 38px 'Cairo', sans-serif";
+  ctx.fillStyle = '#f3ecd8';
+  ctx.fillText(sug.title, W/2, 160);
+
+  if(sug.description){
+    ctx.font = "400 24px 'Cairo', sans-serif";
+    ctx.fillStyle = '#9fb0a3';
+    ctx.fillText(sug.description, W/2, 195);
+  }
+
+  ctx.strokeStyle = '#3a4470';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(marginX, 220); ctx.lineTo(W-marginX, 220); ctx.stroke();
+
+  ctx.font = "900 50px 'Cairo', sans-serif";
+  ctx.fillStyle = '#f3ecd8';
+  ctx.fillText(`${collected.toLocaleString('ar-SA')} / ${target.toLocaleString('ar-SA')} ر.س`, W/2, 285);
+
+  // Progress bar
+  const barW = W - marginX*2, barH = 20, barY = 310;
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  roundRect(ctx, marginX, barY, barW, barH, 10); ctx.fill();
+  const fillW = Math.max(10, barW * Math.min(pct,100)/100);
+  ctx.fillStyle = pct >= 100 ? '#e2a53f' : '#5c8f52';
+  roundRect(ctx, marginX, barY, fillW, barH, 10); ctx.fill();
+  ctx.font = "700 26px 'Cairo', sans-serif";
+  ctx.fillStyle = '#e2a53f';
+  ctx.fillText(`${pct}%`, W/2, barY + 65);
+
+  ctx.font = "700 28px 'Cairo', sans-serif";
+  ctx.fillStyle = '#e2a53f';
+  ctx.fillText(`المساهمون (${contributors.length})`, W/2, listTop - 20);
+
+  if(contributors.length === 0){
+    ctx.font = "500 26px 'Cairo', sans-serif";
+    ctx.fillStyle = '#9fb0a3';
+    ctx.fillText('لا يوجد مساهمون بعد', W/2, listTop + 30);
+  }else{
+    const rowW = W - marginX*2;
+    ctx.font = "500 26px 'Cairo', sans-serif";
+    contributors.forEach((c,i)=>{
+      const y = listTop + i*rowH;
+      ctx.fillStyle = 'rgba(226,165,63,0.10)';
+      roundRect(ctx, marginX, y, rowW, rowH-14, 10);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(226,165,63,0.35)';
+      ctx.lineWidth = 1.5;
+      roundRect(ctx, marginX, y, rowW, rowH-14, 10);
+      ctx.stroke();
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#f3ecd8';
+      ctx.fillText(c.name, W - marginX - 20, y + (rowH-14)/2 + 9);
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#e2a53f';
+      ctx.fillText(`${c.amt.toLocaleString('ar-SA')} ر.س`, marginX + 20, y + (rowH-14)/2 + 9);
+    });
+    ctx.textAlign = 'center';
+  }
+
+  ctx.font = "400 22px 'Cairo', sans-serif";
+  ctx.fillStyle = '#7f8f83';
+  ctx.fillText('أُنشئ تلقائيًا من تطبيق استراحة الدرعية', W/2, H-40);
+
+  return canvas;
+}
+async function shareSuggestionImage(sug, btn){
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ جاري التجهيز...';
+  btn.disabled = true;
+  try{
+    const canvas = await buildSuggestionShareCanvas(sug);
+    canvas.toBlob(async (blob)=>{
+      btn.textContent = originalText;
+      btn.disabled = false;
+      if(!blob){ showAlert('تعذّر إنشاء الصورة.'); return; }
+      const fileName = `اقتراح_${sug.id}.png`;
+      const file = new File([blob], fileName, { type:'image/png' });
+      if(navigator.canShare && navigator.canShare({ files:[file] })){
+        try{
+          await navigator.share({ files:[file], title: sug.title, text: `تحديث اقتراح: ${sug.title}` });
+        }catch(e){ /* user cancelled share, ignore */ }
+      }else{
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = fileName; a.click();
+        URL.revokeObjectURL(url);
+        showAlert('متصفحك لا يدعم المشاركة المباشرة، تم تنزيل الصورة بدلاً من ذلك — شاركها يدويًا عبر واتساب.');
+      }
+    }, 'image/png');
+  }catch(e){
+    console.error('build suggestion share image failed', e);
+    btn.textContent = originalText;
+    btn.disabled = false;
+    showAlert('تعذّر إنشاء الصورة.');
+  }
+}
 
 /* ---------- Monday dinner invitation card ---------- */
 function wrapText(ctx, text, maxWidth){
